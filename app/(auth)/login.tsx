@@ -10,12 +10,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import themes from "../../constants/colors";
+import { useAuth } from "../hooks/useAuth";
 
 export default function Login() {
   const router = useRouter();
   const { top } = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme] ?? themes.light;
+  const { login } = useAuth();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -34,9 +36,22 @@ export default function Login() {
         }
       );
       if (response.ok) {
-        router.replace("/(tabs)");
+        const responseData = await response.json();
+        // Extract token from the nested data structure
+        const token = responseData.data?.access_token ||
+          responseData.access_token ||
+          responseData.data?.token ||
+          responseData.token;
+
+        if (token) {
+          await login(token);
+          router.replace("/(tabs)");
+        } else {
+          alert("Login failed: No token received");
+        }
       } else {
-        alert("Login failed");
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.message || "Login failed");
       }
     } catch (error) {
       console.error(error);
@@ -56,13 +71,13 @@ export default function Login() {
     >
       <View className="flex-1 justify-center items-center">
         <Text
-          className="text-4xl font-bold mb-8"
+          className="mb-8 font-bold text-4xl"
           style={{ color: currentTheme.foreground }}
         >
           Login
         </Text>
         <TextInput
-          className="w-4/5 p-4 rounded-lg mb-4"
+          className="mb-4 p-4 rounded-lg w-4/5"
           style={{
             backgroundColor: currentTheme.card,
             color: currentTheme.foreground,
@@ -75,7 +90,7 @@ export default function Login() {
           keyboardType="email-address"
         />
         <TextInput
-          className="w-4/5 p-4 rounded-lg mb-8"
+          className="mb-8 p-4 rounded-lg w-4/5"
           style={{
             backgroundColor: currentTheme.card,
             color: currentTheme.foreground,
@@ -87,7 +102,7 @@ export default function Login() {
           secureTextEntry
         />
         <TouchableOpacity
-          className="w-4/5 p-4 rounded-lg items-center"
+          className="items-center p-4 rounded-lg w-4/5"
           style={{ backgroundColor: currentTheme.primary }}
           onPress={handleLogin}
           disabled={loading}

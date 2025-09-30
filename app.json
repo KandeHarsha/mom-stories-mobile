@@ -8,8 +8,14 @@
     "scheme": "momstoriesmobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "jsEngine": "hermes",
     "ios": {
-      "supportsTablet": true
+      "jsEngine": "hermes",
+      "supportsTablet": true,
+      "bundleIdentifier": "kvs-iphone",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +29,6 @@
     },
     "web": {
       "output": "static",
-      "bundler": "metro",
       "bundler": "metro",
       "favicon": "./assets/images/favicon.png"
     },
@@ -45,6 +50,18 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6191c5e8-06ba-470a-a0db-303018204760"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/6191c5e8-06ba-470a-a0db-303018204760"
     }
   }
 }
