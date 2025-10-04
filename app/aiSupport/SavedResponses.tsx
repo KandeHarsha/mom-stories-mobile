@@ -48,22 +48,18 @@ const SavedResponses: React.FC<SavedResponsesProps> = ({ onBack }) => {
     setIsLoading(true)
     try {
       const url = `${API_BASE_URL}/memories?isAiResponse=true`
-      console.log('Fetching saved answers from:', url)
 
       const response = await fetch(url, {
         headers: getAuthHeaders(),
       })
 
-      console.log('Saved answers response status:', response.status)
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.log('Saved answers error:', errorText)
         throw new Error(`Failed to fetch saved answers: ${response.status}`)
       }
 
       const fetchedMemories = await response.json()
-      console.log('Fetched memories:', fetchedMemories)
       setSavedAnswers(fetchedMemories)
     } catch (error) {
       console.error('Error fetching saved answers:', error)

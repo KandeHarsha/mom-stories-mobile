@@ -79,30 +79,18 @@ const AiSupportScreen = () => {
         question: userMessage.text
       })
 
-      console.log('API Request Details:', {
-        url,
-        headers,
-        body,
-        API_BASE_URL
-      })
-
       const response = await fetch(url, {
         method: 'POST',
         headers,
         body
       })
 
-      console.log('API Response Status:', response.status)
-      console.log('API Response OK:', response.ok)
-
       if (!response.ok) {
         const errorText = await response.text()
-        console.log('API Error Response:', errorText)
         throw new Error(`API Error: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
-      console.log('API Success Response:', data)
 
       const aiMessage: Message = {
         id: Date.now() + 1,
@@ -142,11 +130,9 @@ const AiSupportScreen = () => {
         body: formData
       })
 
-      console.log('Save response status:', response.status)
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.log('Save error:', errorText)
         throw new Error(`Failed to save response: ${response.status}`)
       }
 
