@@ -154,25 +154,6 @@ const PrivateJournalScreen = () => {
     loadEntries()
   }, [token])
 
-  // Refresh entries when returning from edit screen - but only if needed
-  // Commenting out for now to prevent date issues
-  // useFocusEffect(
-  //   useCallback(() => {
-  //     // Only refresh if we've loaded before and have a token
-  //     if (hasLoadedRef.current && token) {
-  //       const refreshEntries = async () => {
-  //         try {
-  //           const fetchedEntries = await fetchJournalEntries(token)
-  //           setEntries(fetchedEntries)
-  //         } catch (error) {
-  //           // Silently fail on refresh to avoid annoying the user
-  //           console.log('Failed to refresh entries:', error)
-  //         }
-  //       }
-  //       refreshEntries()
-  //     }
-  //   }, [token])
-  // )
 
   const resetForm = () => {
     setTitle('')

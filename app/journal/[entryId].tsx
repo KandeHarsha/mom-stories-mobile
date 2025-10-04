@@ -109,11 +109,7 @@ const JournalEntryEdit = () => {
     // Memoize entry data to prevent infinite re-renders
     const entryData = useMemo(() => {
         if (params.entryId && params.title && params.content) {
-            console.log('Creating entry data with params:', {
-                imageUri: params.imageUri,
-                audioUri: params.audioUri,
-                allParams: params
-            })
+           
             
             return {
                 id: params.entryId,
@@ -129,13 +125,7 @@ const JournalEntryEdit = () => {
 
     useEffect(() => {
         if (entryData) {
-            console.log('📝 Setting entry data:', {
-                id: entryData.id,
-                hasImage: !!entryData.imageUri,
-                imageUri: entryData.imageUri,
-                imageUriLength: entryData.imageUri?.length,
-                hasAudio: !!entryData.audioUri
-            })
+           
             setEntry(entryData)
             setTitle(entryData.title)
             setContent(entryData.content)
@@ -251,7 +241,6 @@ const JournalEntryEdit = () => {
         }
 
         try {
-            console.log('Starting audio playback for:', entry.audioUri)
 
             // Request audio permissions (might be needed for some platforms)
             const { status } = await Audio.requestPermissionsAsync()
@@ -275,7 +264,6 @@ const JournalEntryEdit = () => {
                 setSound(null)
             }
 
-            console.log('Creating sound object...')
 
             const { sound: newSound } = await Audio.Sound.createAsync(
                 { uri: entry.audioUri },
@@ -286,11 +274,9 @@ const JournalEntryEdit = () => {
                 }
             )
 
-            console.log('Sound object created, checking status...')
 
             // Check if sound loaded successfully
             const initialStatus = await newSound.getStatusAsync()
-            console.log('Initial audio status:', initialStatus)
 
             if (!initialStatus.isLoaded) {
                 await newSound.unloadAsync()
@@ -298,7 +284,6 @@ const JournalEntryEdit = () => {
             }
 
             // Start playing
-            console.log('Starting playback...')
             await newSound.playAsync()
 
             setSound(newSound)
@@ -306,10 +291,8 @@ const JournalEntryEdit = () => {
 
             // Set up status listener
             newSound.setOnPlaybackStatusUpdate((status) => {
-                console.log('Playback status update:', status)
                 if (status.isLoaded) {
                     if (status.didJustFinish) {
-                        console.log('Audio finished playing')
                         setIsPlaying(false)
                     }
                 } else if (status.error) {
@@ -319,9 +302,8 @@ const JournalEntryEdit = () => {
                 }
             })
 
-            console.log('Audio playback started successfully')
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Audio play error:', error)
             setIsPlaying(false)
             
@@ -402,8 +384,6 @@ const JournalEntryEdit = () => {
                         <Text style={styles.mediaSectionTitle}>Photo</Text>
                         <TouchableOpacity 
                             onPress={() => {
-                                console.log('🔍 Testing Firebase Storage URL...')
-                                console.log('📍 Full URL:', entry.imageUri)
                                 fetch(entry.imageUri!, { 
                                     method: 'GET',
                                     headers: {
@@ -412,19 +392,15 @@ const JournalEntryEdit = () => {
                                     }
                                 })
                                     .then(response => {
-                                        console.log('📊 Response status:', response.status)
-                                        console.log('📊 Content-Type:', response.headers.get('content-type'))
                                         
                                         if (response.headers.get('content-type')?.includes('json')) {
                                             return response.text().then(text => {
-                                                console.log('❌ Firebase error response:', text)
                                                 throw new Error(`Firebase returned error: ${text}`)
                                             })
                                         }
                                         return response.blob()
                                     })
                                     .then(blob => {
-                                        console.log('✅ Image blob size:', blob.size, 'bytes')
                                     })
                                     .catch(error => {
                                         console.error('❌ Firebase Storage error:', error)
@@ -458,7 +434,6 @@ const JournalEntryEdit = () => {
                                     }} 
                                     style={styles.entryImage}
                                     onLoad={() => {
-                                        console.log('✅ Image loaded successfully for entry:', entry.id)
                                         setImageLoading(false)
                                         setImageError(false)
                                     }}
@@ -470,8 +445,6 @@ const JournalEntryEdit = () => {
                                         setImageError(true)
                                     }}
                                     onLoadStart={() => {
-                                        console.log('🔄 Starting image load for entry:', entry.id)
-                                        console.log('Image URL:', entry.imageUri)
                                         setImageLoading(true)
                                         setImageError(false)
                                     }}

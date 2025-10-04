@@ -13,5 +13,6 @@
   "tailwindCSS.includeLanguages": {
     "typescript": "javascript",
     "typescriptreact": "javascript"
-  }
+  },
+  "typescript.autoClosingTags": false
 }
