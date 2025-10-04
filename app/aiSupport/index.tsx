@@ -15,6 +15,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../hooks/useAuth'
+import SavedResponses from './SavedResponses'
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL
 
@@ -23,6 +24,8 @@ interface Message {
   text: string
   sender: 'user' | 'ai'
   questionForAi?: string
+  isSaved?: boolean
+  isSaving?: boolean
 }
 
 interface Memory {
@@ -47,10 +50,6 @@ const AiSupportScreen = () => {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [view, setView] = useState<'chat' | 'saved'>('chat')
-  const [savedAnswers, setSavedAnswers] = useState<Memory[]>([])
-  const [isLoadingSaved, setIsLoadingSaved] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [expandedAnswer, setExpandedAnswer] = useState<string | null>(null)
 
   const scrollViewRef = useRef<ScrollView>(null)
 
@@ -121,33 +120,64 @@ const AiSupportScreen = () => {
     }
   }
 
-  const fetchSavedAnswers = async () => {
-    if (!token) return
+  const saveResponse = async (message: Message) => {
+    if (!token || !message.questionForAi) return
 
-    setIsLoadingSaved(true)
+    // Update message to show saving state
+    setMessages(prev => prev.map(msg => 
+      msg.id === message.id ? { ...msg, isSaving: true } : msg
+    ))
+
     try {
-      const response = await fetch(`${API_BASE_URL}/memories?isAiResponse=true`, {
-        headers: getAuthHeaders(),
+      const formData = new FormData()
+      formData.append('title', `AI: ${message.questionForAi}`)
+      formData.append('text', message.text)
+      formData.append('isAiResponse', 'true')
+
+      const response = await fetch(`${API_BASE_URL}/memories`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData
       })
 
+      console.log('Save response status:', response.status)
+
       if (!response.ok) {
-        throw new Error('Failed to fetch saved answers')
+        const errorText = await response.text()
+        console.log('Save error:', errorText)
+        throw new Error(`Failed to save response: ${response.status}`)
       }
 
-      const fetchedMemories = await response.json()
-      setSavedAnswers(fetchedMemories)
-      setView('saved')
+      // Update message to show saved state
+      setMessages(prev => prev.map(msg => 
+        msg.id === message.id ? { ...msg, isSaved: true, isSaving: false } : msg
+      ))
+
+      Alert.alert('Success', 'Response saved successfully!')
     } catch (error) {
-      console.error('Error fetching saved answers:', error)
-      Alert.alert('Error', 'Failed to load saved answers')
-    } finally {
-      setIsLoadingSaved(false)
+      console.error('Error saving response:', error)
+      Alert.alert('Error', `Failed to save response: ${(error as Error).message}`)
+      
+      // Reset saving state on error
+      setMessages(prev => prev.map(msg => 
+        msg.id === message.id ? { ...msg, isSaving: false } : msg
+      ))
     }
+  }
+
+  const showSavedResponses = () => {
+    setView('saved')
   }
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true })
   }, [messages])
+
+  if (view === 'saved') {
+    return <SavedResponses onBack={() => setView('chat')} />
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: currentTheme.background }}>
@@ -172,7 +202,7 @@ const AiSupportScreen = () => {
             AI Support
           </Text>
           <TouchableOpacity
-            onPress={fetchSavedAnswers}
+            onPress={showSavedResponses}
             style={{
               padding: 8,
               borderRadius: 8,
@@ -195,22 +225,69 @@ const AiSupportScreen = () => {
               key={message.id}
               style={{
                 alignSelf: message.sender === 'user' ? 'flex-end' : 'flex-start',
-                backgroundColor: message.sender === 'user'
-                  ? currentTheme.primary
-                  : currentTheme.card,
-                padding: 12,
-                borderRadius: 16,
-                marginBottom: 8,
-                maxWidth: '80%'
+                maxWidth: '80%',
+                marginBottom: 8
               }}
             >
-              <Text style={{
-                color: message.sender === 'user' ? currentTheme.primaryForeground : currentTheme.foreground,
-                fontSize: 16,
-                lineHeight: 22
-              }}>
-                {message.text}
-              </Text>
+              <View
+                style={{
+                  backgroundColor: message.sender === 'user'
+                    ? currentTheme.primary
+                    : currentTheme.card,
+                  padding: 12,
+                  borderRadius: 16,
+                }}
+              >
+                <Text style={{
+                  color: message.sender === 'user' ? currentTheme.primaryForeground : currentTheme.foreground,
+                  fontSize: 16,
+                  lineHeight: 22
+                }}>
+                  {message.text}
+                </Text>
+              </View>
+              
+              {/* Save button for AI messages */}
+              {message.sender === 'ai' && message.id !== 1 && (
+                <View style={{
+                  flexDirection: 'row',
+                  justifyContent: 'flex-start',
+                  marginTop: 4
+                }}>
+                  <TouchableOpacity
+                    onPress={() => saveResponse(message)}
+                    disabled={message.isSaving || message.isSaved}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 6,
+                      borderRadius: 12,
+                      backgroundColor: message.isSaved 
+                        ? currentTheme.muted 
+                        : currentTheme.secondary,
+                      opacity: message.isSaving ? 0.6 : 1
+                    }}
+                  >
+                    {message.isSaving ? (
+                      <ActivityIndicator size="small" color={currentTheme.primary} />
+                    ) : (
+                      <Ionicons 
+                        name={message.isSaved ? "bookmark" : "bookmark-outline"} 
+                        size={14} 
+                        color={message.isSaved ? currentTheme.primary : currentTheme.mutedForeground} 
+                      />
+                    )}
+                    <Text style={{
+                      marginLeft: 4,
+                      fontSize: 12,
+                      color: message.isSaved ? currentTheme.primary : currentTheme.mutedForeground,
+                      fontWeight: '500'
+                    }}>
+                      {message.isSaving ? 'Saving...' : message.isSaved ? 'Saved' : 'Save'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           ))}
 
