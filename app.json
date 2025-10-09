@@ -25,7 +25,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.harshakande.momstoriesmobile"
     },
     "web": {
       "output": "static",
@@ -51,17 +52,18 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "6191c5e8-06ba-470a-a0db-303018204760"
-      }
-    },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
       "url": "https://u.expo.dev/6191c5e8-06ba-470a-a0db-303018204760"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e106ee42-ff8a-4fcb-acac-12a09ee1f5b4"
+      }
+    },
+    "owner": "harshakande"
   }
 }
