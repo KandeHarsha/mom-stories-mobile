@@ -1,7 +1,7 @@
-import { Tabs } from 'expo-router'
-import React from 'react'
+import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
 import { useColorScheme } from 'nativewind';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React from 'react';
 import themes from '../../constants/colors';
 
 const _layout = () => {
@@ -23,28 +23,28 @@ const _layout = () => {
         title: 'Dashboard',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <MaterialCommunityIcons name="view-dashboard" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <Ionicons name="grid-outline" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
         ),
       }} />
       <Tabs.Screen name='privateJournal' options={{
         title: 'Private Journal',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <MaterialCommunityIcons name="book-lock" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <Ionicons name="book-outline" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
         ),
       }} />
       <Tabs.Screen name='healthTracker' options={{
         title: 'Health Tracker',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <MaterialCommunityIcons name="heart-pulse" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <Ionicons name="heart-outline" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
         ),
       }} />
       <Tabs.Screen name='aiSupport' options={{
         title: 'Gentle AI Support',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <MaterialCommunityIcons name="robot-love" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <Ionicons name="chatbubble-outline" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
         ),
       }} />
 

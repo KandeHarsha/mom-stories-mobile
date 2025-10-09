@@ -1,8 +1,8 @@
 import { Stack } from "expo-router";
-import "./global.css";
-import React from "react";
 import { useColorScheme } from "nativewind";
+import React from "react";
 import themes from "../constants/colors";
+import "./global.css";
 
 export default function RootLayout() {
   const { colorScheme } = useColorScheme();
