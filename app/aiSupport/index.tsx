@@ -1,5 +1,5 @@
 import themes from '@/constants/colors'
-import { Ionicons } from '@expo/vector-icons'
+import { Bookmark, Send } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useRef, useState } from 'react'
 import {
@@ -102,7 +102,7 @@ const AiSupportScreen = () => {
       setMessages(prev => [...prev, aiMessage])
     } catch (error) {
       console.error('Error sending message:', error)
-      Alert.alert('Error', `Failed to send message: ${error.message}`)
+      Alert.alert('Error', `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsLoading(false)
     }
@@ -112,7 +112,7 @@ const AiSupportScreen = () => {
     if (!token || !message.questionForAi) return
 
     // Update message to show saving state
-    setMessages(prev => prev.map(msg => 
+    setMessages(prev => prev.map(msg =>
       msg.id === message.id ? { ...msg, isSaving: true } : msg
     ))
 
@@ -137,17 +137,17 @@ const AiSupportScreen = () => {
       }
 
       // Update message to show saved state
-      setMessages(prev => prev.map(msg => 
+      setMessages(prev => prev.map(msg =>
         msg.id === message.id ? { ...msg, isSaved: true, isSaving: false } : msg
       ))
 
       Alert.alert('Success', 'Response saved successfully!')
     } catch (error) {
       console.error('Error saving response:', error)
-      Alert.alert('Error', `Failed to save response: ${(error as Error).message}`)
-      
+      Alert.alert('Error', `Failed to save response: ${error instanceof Error ? error.message : 'Unknown error'}`)
+
       // Reset saving state on error
-      setMessages(prev => prev.map(msg => 
+      setMessages(prev => prev.map(msg =>
         msg.id === message.id ? { ...msg, isSaving: false } : msg
       ))
     }
@@ -195,7 +195,7 @@ const AiSupportScreen = () => {
               backgroundColor: currentTheme.primary
             }}
           >
-            <Ionicons name="bookmark" size={20} color="white" />
+            <Bookmark size={20} color="white" fill="white" />
           </TouchableOpacity>
         </View>
 
@@ -232,7 +232,7 @@ const AiSupportScreen = () => {
                   {message.text}
                 </Text>
               </View>
-              
+
               {/* Save button for AI messages */}
               {message.sender === 'ai' && message.id !== 1 && (
                 <View style={{
@@ -248,8 +248,8 @@ const AiSupportScreen = () => {
                       alignItems: 'center',
                       padding: 6,
                       borderRadius: 12,
-                      backgroundColor: message.isSaved 
-                        ? currentTheme.muted 
+                      backgroundColor: message.isSaved
+                        ? currentTheme.muted
                         : currentTheme.secondary,
                       opacity: message.isSaving ? 0.6 : 1
                     }}
@@ -257,10 +257,10 @@ const AiSupportScreen = () => {
                     {message.isSaving ? (
                       <ActivityIndicator size="small" color={currentTheme.primary} />
                     ) : (
-                      <Ionicons 
-                        name={message.isSaved ? "bookmark" : "bookmark-outline"} 
-                        size={14} 
-                        color={message.isSaved ? currentTheme.primary : currentTheme.mutedForeground} 
+                      <Bookmark
+                        size={14}
+                        color={message.isSaved ? currentTheme.primary : currentTheme.mutedForeground}
+                        fill={message.isSaved ? currentTheme.primary : 'none'}
                       />
                     )}
                     <Text style={{
@@ -331,8 +331,7 @@ const AiSupportScreen = () => {
               justifyContent: 'center'
             }}
           >
-            <Ionicons
-              name="send"
+            <Send
               size={20}
               color={input.trim() && !isLoading ? currentTheme.primaryForeground : currentTheme.mutedForeground}
             />

@@ -5,14 +5,12 @@ import { useAuth } from "./hooks/useAuth";
 export default function Index() {
   const { isAuthenticated, loading } = useAuth();
 
+
   if (loading) {
-    // You can return a loading screen here
-    return null;
+    return null; // Root layout will show loading
   }
 
-  if (isAuthenticated) {
-    return <Redirect href="/(tabs)" />;
-  } else {
-    return <Redirect href="/(auth)/login" />;
-  }
+  // Simple one-time redirect based on auth status
+  
+  return isAuthenticated ? <Redirect href="/(tabs)" /> : <Redirect href="/(auth)/login" />;
 }

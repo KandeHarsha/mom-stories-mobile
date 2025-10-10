@@ -1,5 +1,5 @@
 import themes from '@/constants/colors'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, Bookmark, RefreshCw } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useState } from 'react'
 import {
@@ -96,7 +96,7 @@ const SavedResponses: React.FC<SavedResponsesProps> = ({ onBack }) => {
             marginRight: 12
           }}
         >
-          <Ionicons name="arrow-back" size={24} color={currentTheme.foreground} />
+          <ArrowLeft size={24} color={currentTheme.foreground} />
         </TouchableOpacity>
         <Text style={{
           fontSize: 20,
@@ -114,7 +114,7 @@ const SavedResponses: React.FC<SavedResponsesProps> = ({ onBack }) => {
             backgroundColor: currentTheme.primary
           }}
         >
-          <Ionicons name="refresh" size={20} color="white" />
+          <RefreshCw size={20} color="white" />
         </TouchableOpacity>
       </View>
 
@@ -140,7 +140,7 @@ const SavedResponses: React.FC<SavedResponsesProps> = ({ onBack }) => {
           alignItems: 'center',
           padding: 32
         }}>
-          <Ionicons name="bookmark-outline" size={64} color={currentTheme.mutedForeground} />
+          <Bookmark size={64} color={currentTheme.mutedForeground} />
           <Text style={{
             fontSize: 18,
             fontWeight: '600',

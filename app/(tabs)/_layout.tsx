@@ -1,12 +1,12 @@
-import { Tabs } from 'expo-router'
-import React from 'react'
+import { Tabs } from 'expo-router';
+import { BookOpen, Heart, Home, MessageCircle, User } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React from 'react';
 import themes from '../../constants/colors';
 
 const _layout = () => {
   const { colorScheme } = useColorScheme();
-  const currentTheme = themes[colorScheme] ?? themes.light;
+  const currentTheme = themes[colorScheme as keyof typeof themes] ?? themes.light;
 
   return (
     <Tabs
@@ -23,28 +23,35 @@ const _layout = () => {
         title: 'Dashboard',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <MaterialCommunityIcons name="view-dashboard" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <Home size={size} color={focused ? currentTheme.primary : currentTheme.mutedForeground} fill={focused ? currentTheme.primary : 'none'} />
         ),
       }} />
       <Tabs.Screen name='privateJournal' options={{
         title: 'Private Journal',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <MaterialCommunityIcons name="book-lock" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <BookOpen size={size} color={focused ? currentTheme.primary : currentTheme.mutedForeground} fill={focused ? currentTheme.primary : 'none'} />
         ),
       }} />
       <Tabs.Screen name='healthTracker' options={{
         title: 'Health Tracker',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <MaterialCommunityIcons name="heart-pulse" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <Heart size={size} color={focused ? currentTheme.primary : currentTheme.mutedForeground} fill={focused ? currentTheme.primary : 'none'} />
         ),
       }} />
       <Tabs.Screen name='aiSupport' options={{
-        title: 'Gentle AI Support',
+        title: 'AI Support',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <MaterialCommunityIcons name="robot-love" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <MessageCircle size={size} color={focused ? currentTheme.primary : currentTheme.mutedForeground} fill={focused ? currentTheme.primary : 'none'} />
+        ),
+      }} />
+      <Tabs.Screen name='profile' options={{
+        title: 'Profile',
+        headerShown: false,
+        tabBarIcon: ({ focused, size }) => (
+          <User size={size} color={focused ? currentTheme.primary : currentTheme.mutedForeground} fill={focused ? currentTheme.primary : 'none'} />
         ),
       }} />
 

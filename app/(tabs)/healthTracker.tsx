@@ -1,14 +1,8 @@
-import React from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import React from 'react';
+import HealthTracker from '../health-tracker';
 
 const healthTracker = () => {
-  return (
-    <View className="flex-1 justify-center items-center bg-background">
-      <Text className="text-bold text-primary text-3xl">Health Tracker!!</Text>
-    </View>
-  )
-}
+  return <HealthTracker />;
+};
 
-export default healthTracker
-
-const styles = StyleSheet.create({})
+export default healthTracker;
