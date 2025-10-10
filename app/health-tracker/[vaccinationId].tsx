@@ -82,7 +82,6 @@ const VaccinationDetail = () => {
 
   const fetchVaccinationById = async (vaccinationId: string) => {
     if (!token || authLoading) {
-      console.log('No token or auth still loading, skipping vaccination fetch');
       return;
     }
 

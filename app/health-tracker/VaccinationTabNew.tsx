@@ -5,12 +5,12 @@ import { ChevronRight, Syringe } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 
@@ -34,12 +34,6 @@ export default function VaccinationTabNew() {
   const [isLoading, setIsLoading] = useState(false);
   const { token, loading: authLoading } = useAuth();
 
-  // Debug: Log token info when component mounts
-  useEffect(() => {
-    console.log('VaccinationTabNew - Auth loading:', authLoading);
-    console.log('VaccinationTabNew - Token exists:', !!token);
-    console.log('VaccinationTabNew - Token preview:', token ? `${token.substring(0, 10)}...` : 'null');
-  }, [token, authLoading]);
 
   useEffect(() => {
     if (!authLoading && token) {
@@ -58,15 +52,11 @@ export default function VaccinationTabNew() {
 
   const loadVaccinations = async () => {
     if (!token) {
-      console.log('No token available, skipping vaccination load');
       return;
     }
     
     setIsLoading(true);
-    try {
-      console.log('Loading vaccinations with token length:', token.length);
-      console.log('API URL:', `${API_BASE_URL}/vaccinations`);
-      
+    try {      
       const response = await fetch(`${API_BASE_URL}/vaccinations`, {
         method: 'GET',
         headers: {
@@ -75,13 +65,11 @@ export default function VaccinationTabNew() {
         },
       });
 
-      console.log('Response status:', response.status);
       
       if (!response.ok) {
         let errorMessage = `HTTP ${response.status}`;
         try {
           const errorText = await response.text();
-          console.log('Error response:', errorText);
           errorMessage = `${response.status} - ${errorText}`;
         } catch (e) {
           console.log('Could not read error response');
@@ -96,7 +84,6 @@ export default function VaccinationTabNew() {
       }
 
       const data = await response.json();
-      console.log('Received vaccination count:', data.length);
       // Sort vaccinations by order field
       const sortedData = data.sort((a: MergedVaccination, b: MergedVaccination) => a.order - b.order);
       setVaccinations(sortedData);

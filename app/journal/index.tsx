@@ -1,8 +1,8 @@
 import themes from '@/constants/colors'
-import { Ionicons } from '@expo/vector-icons'
 import { Audio } from 'expo-av'
 import * as ImagePicker from 'expo-image-picker'
 import { router } from 'expo-router'
+import { BookOpen, ChevronRight, ImageIcon, Mic, PlusCircle, RefreshCw, StopCircle, X } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useRef, useState } from 'react'
 import {
@@ -277,7 +277,7 @@ const PrivateJournalScreen = () => {
             style={styles.newEntryButton}
             onPress={() => setIsNewEntryOpen(true)}
           >
-            <Ionicons name="add-circle" size={24} color={currentTheme.primaryForeground} />
+            <PlusCircle size={24} color={currentTheme.primaryForeground} />
             <Text style={styles.newEntryButtonText}>New Entry</Text>
           </TouchableOpacity>
         </View>
@@ -286,12 +286,12 @@ const PrivateJournalScreen = () => {
         <View style={styles.entriesContainer}>
           {isLoading ? (
             <View style={styles.emptyState}>
-              <Ionicons name="refresh" size={64} color={currentTheme.mutedForeground} />
+              <RefreshCw size={64} color={currentTheme.mutedForeground} />
               <Text style={styles.emptyStateText}>Loading entries...</Text>
             </View>
           ) : entries.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="book-outline" size={64} color={currentTheme.mutedForeground} />
+              <BookOpen size={64} color={currentTheme.mutedForeground} />
               <Text style={styles.emptyStateText}>No entries yet</Text>
               <Text style={styles.emptyStateSubtext}>Tap "New Entry" to start journaling</Text>
             </View>
@@ -318,12 +318,12 @@ const PrivateJournalScreen = () => {
                   <View style={styles.mediaIndicators}>
                     {entry.imageUri && (
                       <View style={styles.mediaIndicator}>
-                        <Ionicons name="image" size={16} color={currentTheme.primary} />
+                        <ImageIcon size={16} color={currentTheme.primary} />
                       </View>
                     )}
                     {entry.audioUri && (
                       <View style={styles.mediaIndicator}>
-                        <Ionicons name="mic" size={16} color={currentTheme.primary} />
+                        <Mic size={16} color={currentTheme.primary} />
                       </View>
                     )}
                   </View>
@@ -334,7 +334,7 @@ const PrivateJournalScreen = () => {
                     {entry.createdAt || 'Date unavailable'}
                   </Text>
                   <View style={styles.editIndicator}>
-                    <Ionicons name="chevron-forward" size={16} color={currentTheme.mutedForeground} />
+                    <ChevronRight size={16} color={currentTheme.mutedForeground} />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -401,7 +401,7 @@ const PrivateJournalScreen = () => {
             {/* Media Buttons */}
             <View style={styles.mediaButtons}>
               <TouchableOpacity style={styles.mediaButton} onPress={handleImagePicker}>
-                <Ionicons name="image" size={20} color={currentTheme.primary} />
+                <ImageIcon size={20} color={currentTheme.primary} />
                 <Text style={styles.mediaButtonText}>
                   {selectedImageUri ? 'Change photo' : 'Add photo'}
                 </Text>
@@ -411,11 +411,11 @@ const PrivateJournalScreen = () => {
                 style={[styles.mediaButton, isRecording && styles.recordingButton]}
                 onPress={isRecording ? handleStopRecording : handleStartRecording}
               >
-                <Ionicons
-                  name={isRecording ? "stop" : "mic"}
-                  size={20}
-                  color={isRecording ? "white" : currentTheme.primary}
-                />
+                {isRecording ? (
+                  <StopCircle size={20} color="white" />
+                ) : (
+                  <Mic size={20} color={currentTheme.primary} />
+                )}
                 <Text style={[styles.mediaButtonText, isRecording && styles.recordingButtonText]}>
                   {isRecording ? 'Stop Recording' : 'Record voice note'}
                 </Text>
@@ -429,7 +429,7 @@ const PrivateJournalScreen = () => {
                 <View style={styles.imagePreview}>
                   <Image source={{ uri: selectedImageUri }} style={styles.previewImage} />
                   <TouchableOpacity style={styles.removeButton} onPress={removeImage}>
-                    <Ionicons name="close" size={20} color="white" />
+                    <X size={20} color="white" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -440,10 +440,10 @@ const PrivateJournalScreen = () => {
               <View style={styles.previewContainer}>
                 <Text style={styles.label}>Voice Note</Text>
                 <View style={styles.audioPreview}>
-                  <Ionicons name="mic" size={24} color={currentTheme.primary} />
+                  <Mic size={24} color={currentTheme.primary} />
                   <Text style={styles.audioText}>Voice note recorded</Text>
                   <TouchableOpacity style={styles.removeAudioButton} onPress={removeAudio}>
-                    <Ionicons name="close" size={16} color="#666" />
+                    <X size={16} color="#666" />
                   </TouchableOpacity>
                 </View>
               </View>

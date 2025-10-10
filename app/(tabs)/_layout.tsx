@@ -1,12 +1,12 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { BookOpen, Heart, Home, MessageCircle, User } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React from 'react';
 import themes from '../../constants/colors';
 
 const _layout = () => {
   const { colorScheme } = useColorScheme();
-  const currentTheme = themes[colorScheme] ?? themes.light;
+  const currentTheme = themes[colorScheme as keyof typeof themes] ?? themes.light;
 
   return (
     <Tabs
@@ -23,28 +23,35 @@ const _layout = () => {
         title: 'Dashboard',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <Ionicons name="grid-outline" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <Home size={size} color={focused ? currentTheme.primary : currentTheme.mutedForeground} fill={focused ? currentTheme.primary : 'none'} />
         ),
       }} />
       <Tabs.Screen name='privateJournal' options={{
         title: 'Private Journal',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <Ionicons name="book-outline" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <BookOpen size={size} color={focused ? currentTheme.primary : currentTheme.mutedForeground} fill={focused ? currentTheme.primary : 'none'} />
         ),
       }} />
       <Tabs.Screen name='healthTracker' options={{
         title: 'Health Tracker',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <Ionicons name="heart-outline" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <Heart size={size} color={focused ? currentTheme.primary : currentTheme.mutedForeground} fill={focused ? currentTheme.primary : 'none'} />
         ),
       }} />
       <Tabs.Screen name='aiSupport' options={{
-        title: 'Gentle AI Support',
+        title: 'AI Support',
         headerShown: false,
         tabBarIcon: ({ focused, size }) => (
-          <Ionicons name="chatbubble-outline" color={focused ? currentTheme.primary : currentTheme.mutedForeground} size={size} />
+          <MessageCircle size={size} color={focused ? currentTheme.primary : currentTheme.mutedForeground} fill={focused ? currentTheme.primary : 'none'} />
+        ),
+      }} />
+      <Tabs.Screen name='profile' options={{
+        title: 'Profile',
+        headerShown: false,
+        tabBarIcon: ({ focused, size }) => (
+          <User size={size} color={focused ? currentTheme.primary : currentTheme.mutedForeground} fill={focused ? currentTheme.primary : 'none'} />
         ),
       }} />
 

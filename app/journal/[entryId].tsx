@@ -1,7 +1,7 @@
 import themes from '@/constants/colors'
-import { Ionicons } from '@expo/vector-icons'
 import { Audio } from 'expo-av'
 import { router, useLocalSearchParams } from 'expo-router'
+import { ArrowLeft, Edit3, ImageIcon, Play, StopCircle, Trash2 } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useMemo, useState } from 'react'
 import {
@@ -109,8 +109,8 @@ const JournalEntryEdit = () => {
     // Memoize entry data to prevent infinite re-renders
     const entryData = useMemo(() => {
         if (params.entryId && params.title && params.content) {
-           
-            
+
+
             return {
                 id: params.entryId,
                 title: params.title,
@@ -125,7 +125,7 @@ const JournalEntryEdit = () => {
 
     useEffect(() => {
         if (entryData) {
-           
+
             setEntry(entryData)
             setTitle(entryData.title)
             setContent(entryData.content)
@@ -267,7 +267,7 @@ const JournalEntryEdit = () => {
 
             const { sound: newSound } = await Audio.Sound.createAsync(
                 { uri: entry.audioUri },
-                { 
+                {
                     shouldPlay: false,
                     isLooping: false,
                     volume: 1.0,
@@ -306,14 +306,14 @@ const JournalEntryEdit = () => {
         } catch (error: any) {
             console.error('Audio play error:', error)
             setIsPlaying(false)
-            
+
             let errorMessage = 'Unknown error occurred'
             if (error.message) {
                 errorMessage = error.message
             } else if (typeof error === 'string') {
                 errorMessage = error
             }
-            
+
             Alert.alert('Audio Error', `Failed to play audio: ${errorMessage}`)
         }
     }
@@ -347,7 +347,7 @@ const JournalEntryEdit = () => {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color={currentTheme.foreground} />
+                    <ArrowLeft size={24} color={currentTheme.foreground} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>
                     {isEditing ? 'Edit Entry' : 'Journal Entry'}
@@ -357,8 +357,7 @@ const JournalEntryEdit = () => {
                     disabled={isDeleting || isEditing}
                     style={[styles.deleteButton, (isDeleting || isEditing) && styles.deleteButtonDisabled]}
                 >
-                    <Ionicons
-                        name="trash-outline"
+                    <Trash2
                         size={20}
                         color={(isDeleting || isEditing) ? currentTheme.mutedForeground : currentTheme.destructive}
                     />
@@ -382,9 +381,9 @@ const JournalEntryEdit = () => {
                 {entry.imageUri && (
                     <View style={styles.mediaSection}>
                         <Text style={styles.mediaSectionTitle}>Photo</Text>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             onPress={() => {
-                                fetch(entry.imageUri!, { 
+                                fetch(entry.imageUri!, {
                                     method: 'GET',
                                     headers: {
                                         'Accept': 'image/*',
@@ -392,7 +391,7 @@ const JournalEntryEdit = () => {
                                     }
                                 })
                                     .then(response => {
-                                        
+
                                         if (response.headers.get('content-type')?.includes('json')) {
                                             return response.text().then(text => {
                                                 throw new Error(`Firebase returned error: ${text}`)
@@ -420,18 +419,18 @@ const JournalEntryEdit = () => {
                             )}
                             {imageError ? (
                                 <View style={styles.imageErrorContainer}>
-                                    <Ionicons name="image-outline" size={48} color={currentTheme.mutedForeground} />
+                                    <ImageIcon size={48} color={currentTheme.mutedForeground} />
                                     <Text style={styles.imageErrorText}>Image unavailable</Text>
                                 </View>
                             ) : (
-                                <Image 
-                                    source={{ 
+                                <Image
+                                    source={{
                                         uri: entry.imageUri,
                                         headers: {
                                             'Accept': 'image/*',
                                             'User-Agent': 'ReactNative'
                                         }
-                                    }} 
+                                    }}
                                     style={styles.entryImage}
                                     onLoad={() => {
                                         setImageLoading(false)
@@ -465,11 +464,11 @@ const JournalEntryEdit = () => {
                                 style={styles.audioButton}
                                 onPress={isPlaying ? stopAudio : playAudio}
                             >
-                                <Ionicons
-                                    name={isPlaying ? "stop" : "play"}
-                                    size={24}
-                                    color={currentTheme.primaryForeground}
-                                />
+                                {isPlaying ? (
+                                    <StopCircle size={24} color={currentTheme.primaryForeground} />
+                                ) : (
+                                    <Play size={24} color={currentTheme.primaryForeground} />
+                                )}
                             </TouchableOpacity>
                             <View style={styles.audioInfo}>
                                 <Text style={styles.audioText}>
@@ -567,7 +566,7 @@ const JournalEntryEdit = () => {
                             onPress={handleEdit}
                             style={styles.editButton}
                         >
-                            <Ionicons name="create-outline" size={20} color={currentTheme.primaryForeground} />
+                            <Edit3 size={20} color={currentTheme.primaryForeground} />
                             <Text style={styles.editButtonText}>Edit Entry</Text>
                         </TouchableOpacity>
                     </>

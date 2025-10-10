@@ -16,14 +16,20 @@ export default function Login() {
   const router = useRouter();
   const { top } = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
-  const currentTheme = themes[colorScheme] ?? themes.light;
-  const { login } = useAuth();
+  const currentTheme = themes[colorScheme as keyof typeof themes] ?? themes.light;
+  const { loginWithResponse } = useAuth();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
   const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      alert("Please enter both email and password");
+      return;
+    }
+
     setLoading(true);
+
     try {
       const response = await fetch(
         `${process.env.EXPO_PUBLIC_API_URL}/auth/emailLogin`,
@@ -37,25 +43,19 @@ export default function Login() {
       );
       if (response.ok) {
         const responseData = await response.json();
-        // Extract token from the nested data structure
-        const token = responseData.data?.access_token ||
-          responseData.access_token ||
-          responseData.data?.token ||
-          responseData.token;
 
-        if (token) {
-          await login(token);
+        // Use the new loginWithResponse method to handle the full response
+        await loginWithResponse(responseData);
+        // Manual redirect as fallback
+        setTimeout(() => {
           router.replace("/(tabs)");
-        } else {
-          alert("Login failed: No token received");
-        }
+        }, 100);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.message || "Login failed");
+        alert(errorData.message || `Login failed: ${response.status} - Invalid credentials`);
       }
     } catch (error) {
-      console.error(error);
-      alert("An error occurred");
+      alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
