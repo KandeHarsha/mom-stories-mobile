@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "momstoriesmobile",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+  "newArchEnabled": true,
     "jsEngine": "hermes",
     "ios": {
       "jsEngine": "hermes",
@@ -36,6 +36,14 @@
     "plugins": [
       "expo-router",
       [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/logo-backgroundless.png",
@@ -46,11 +54,12 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": false
     },
     "runtimeVersion": {
       "policy": "appVersion"
