@@ -1,6 +1,9 @@
+import { useAuth } from "@/context/AuthContext";
 import { Redirect } from "expo-router";
+import React from "react";
 
 export default function Index() {
-  // Redirect directly to tabs (no authentication required)
-  return <Redirect href="/(tabs)" />;
+  const { session } = useAuth();
+
+  return session ? <Redirect href="/(tabs)" /> : <Redirect href="/(auth)/login" />;
 }

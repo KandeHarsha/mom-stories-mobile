@@ -1,4 +1,5 @@
 import themes from '@/constants/colors'
+import { useAuth } from '@/context/AuthContext'
 import { ArrowLeft, Bookmark, RefreshCw } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useState } from 'react'
@@ -11,7 +12,6 @@ import {
   View
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useAuth } from '../hooks/useAuth'
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL
 
@@ -29,7 +29,8 @@ interface SavedResponsesProps {
 }
 
 const SavedResponses: React.FC<SavedResponsesProps> = ({ onBack }) => {
-  const { token } = useAuth()
+  const { session } = useAuth()
+  const token = session?.accessToken
   const { colorScheme } = useColorScheme()
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light
 

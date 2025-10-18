@@ -1,4 +1,5 @@
 import themes from '@/constants/colors'
+import { useAuth } from '@/context/AuthContext'
 import { Audio } from 'expo-av'
 import { router, useLocalSearchParams } from 'expo-router'
 import { ArrowLeft, Edit3, ImageIcon, Play, StopCircle, Trash2 } from 'lucide-react-native'
@@ -15,7 +16,6 @@ import {
     View
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useAuth } from '../hooks/useAuth'
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL
 
@@ -83,7 +83,8 @@ const JournalEntryEdit = () => {
         createdAt: string
     }>()
 
-    const { token } = useAuth()
+    const { session } = useAuth()
+    const token = session?.accessToken
     const { colorScheme } = useColorScheme()
     const currentTheme = themes[colorScheme || 'light'] ?? themes.light
 

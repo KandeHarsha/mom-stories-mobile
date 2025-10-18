@@ -1,4 +1,5 @@
 import themes from '@/constants/colors';
+import { useAuth } from '@/context/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ImagePlus, Loader2, Paperclip, Syringe, ViewIcon, X } from 'lucide-react-native';
@@ -16,7 +17,6 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../hooks/useAuth';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -45,7 +45,8 @@ const VaccinationDetail = () => {
 
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
-  const { token, loading: authLoading } = useAuth();
+  const { session } = useAuth();
+  const token = session?.accessToken;
 
   const [vaccination, setVaccination] = useState<MergedVaccination | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -81,7 +82,7 @@ const VaccinationDetail = () => {
   }, [vaccinationData, params.vaccinationId]);
 
   const fetchVaccinationById = async (vaccinationId: string) => {
-    if (!token || authLoading) {
+    if (!token) {
       return;
     }
 
@@ -145,7 +146,7 @@ const VaccinationDetail = () => {
   };
 
   const updateStatus = async (status: 0 | 1, imageFile: any = null) => {
-    if (!vaccination || !token || authLoading) return;
+    if (!vaccination || !token) return;
 
     setIsUpdating(true);
 
