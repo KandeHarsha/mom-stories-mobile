@@ -1,8 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState } from 'react';
-
-const TOKEN_KEY = 'access_token'
-const PROFILE_KEY = 'user_profile'
+// ⚠️ AUTHENTICATION DISABLED - This is a mock implementation
+// To re-enable authentication, restore the useAuth.BACKUP.ts file
 
 interface UserProfile {
   ID: string
@@ -19,151 +16,44 @@ interface UserProfile {
   LastLoginDate: string
 }
 
-// Helper function to parse login response and extract profile
-const parseLoginResponse = (response: any): { token: string; profile: UserProfile } => {
-  
-  const data = response.data || response
-  
-  const profile = data.Profile
-  
-  const token = data.access_token;
-  
-  if (!token) {
-    throw new Error("No access token found in response");
-  }
-  
-  if (!profile) {
-    throw new Error("No profile data found in response");
-  }
-  
-  const parsedProfile = {
-    ID: profile.ID,
-    FullName: profile.FullName,
-    FirstName: profile.FirstName,
-    LastName: profile.LastName,
-    Email: profile.Email,
-    ImageUrl: profile.ImageUrl || profile.Identities?.[0]?.ImageUrl,
-    ThumbnailImageUrl: profile.ThumbnailImageUrl || profile.Identities?.[0]?.ThumbnailImageUrl,
-    Company: profile.Company,
-    LocalCity: profile.LocalCity,
-    LocalCountry: profile.LocalCountry,
-    CreatedDate: profile.CreatedDate,
-    LastLoginDate: profile.LastLoginDate,
-  };
-  
-  
-  return {
-    token,
-    profile: parsedProfile
-  }
-}
-
 export const useAuth = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [token, setToken] = useState<string | null>(null)
-  const [user, setUser] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Mock user data
+  const mockUser: UserProfile = {
+    ID: 'mock-user-id',
+    FullName: 'Test User',
+    FirstName: 'Test',
+    LastName: 'User',
+    Email: [{ Type: 'Primary', Value: 'test@example.com' }],
+    ImageUrl: null,
+    ThumbnailImageUrl: null,
+    Company: 'Test Company',
+    LocalCity: 'Test City',
+    LocalCountry: 'Test Country',
+    CreatedDate: new Date().toISOString(),
+    LastLoginDate: new Date().toISOString(),
+  };
 
-  useEffect(() => {
-    checkAuthStatus()
-  }, [])
-
-  const checkAuthStatus = async () => {
-    try {
-      const storedToken = await AsyncStorage.getItem(TOKEN_KEY)
-      const storedProfile = await AsyncStorage.getItem(PROFILE_KEY)
-      
-      
-      if (storedToken && storedToken.trim() !== '') {
-        setToken(storedToken)
-        setIsAuthenticated(true)
-        
-        if (storedProfile) {
-          try {
-            const parsedProfile = JSON.parse(storedProfile);
-            setUser(parsedProfile)
-          } catch (parseError) {
-            // Clear invalid profile data
-            await AsyncStorage.removeItem(PROFILE_KEY);
-          }
-        }
-      } else {
-        setIsAuthenticated(false);
-        setToken(null);
-        setUser(null);
-      }
-    } catch (error) {
-      // On error, assume not authenticated
-      setIsAuthenticated(false);
-      setToken(null);
-      setUser(null);
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const login = async (token: string, profile?: UserProfile) => {
-    try {
-      await AsyncStorage.setItem(TOKEN_KEY, token)
-      
-      setToken(token)
-      setIsAuthenticated(true)
-      
-      if (profile) {
-        await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
-        setUser(profile)
-      }
-      
-      // Log final state
-    } catch (error) {
-      console.error('❌ Error storing auth data:', error)
-      throw error
-    }
-  }
-
-  const loginWithResponse = async (loginResponse: any) => {
-    try {
-      const { token, profile } = parseLoginResponse(loginResponse)
-      await login(token, profile)
-      
-      // Force a small delay to ensure state updates are processed
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-    } catch (error) {
-      console.error('❌ Error processing login response:', error)
-      throw error
-    }
-  }
-
-  const logout = async () => {
-    try {
-      await AsyncStorage.multiRemove([TOKEN_KEY, PROFILE_KEY])
-      
-      // Update state synchronously
-      setToken(null)
-      setUser(null)
-      setIsAuthenticated(false)
-      
-      // Force a small delay to ensure state propagation
-      setTimeout(() => {
-        console.log("🔄 Triggering auth state check after logout");
-      }, 100);
-      
-    } catch (error) {
-      console.error('❌ Error removing auth data:', error)
-    }
-  }
-
+  // Return mock authenticated state
   return {
-    isAuthenticated,
-    token,
-    user,
-    loading,
-    login,
-    loginWithResponse,
-    logout,
-  }
-}
+    isAuthenticated: true,
+    token: 'mock-token-for-development',
+    user: mockUser,
+    loading: false,
+    login: async () => {
+      console.log('⚠️ Auth is disabled - login() called but does nothing');
+    },
+    loginWithResponse: async () => {
+      console.log('⚠️ Auth is disabled - loginWithResponse() called but does nothing');
+    },
+    logout: async () => {
+      console.log('⚠️ Auth is disabled - logout() called but does nothing');
+    },
+    version: 0,
+    checkTokenValidity: async () => {
+      console.log('⚠️ Auth is disabled - checkTokenValidity() called but does nothing');
+    },
+  };
+};
 
 // Also export as default for compatibility
-export default useAuth
+export default useAuth;
