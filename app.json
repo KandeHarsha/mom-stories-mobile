@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "momstoriesmobile",
     "userInterfaceStyle": "automatic",
-  "newArchEnabled": true,
+    "newArchEnabled": true,
     "jsEngine": "hermes",
     "ios": {
       "jsEngine": "hermes",
@@ -55,7 +55,8 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

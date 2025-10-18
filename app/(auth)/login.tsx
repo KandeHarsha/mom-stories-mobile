@@ -1,4 +1,5 @@
-import { useRouter } from "expo-router";
+import { useAuth } from "@/context/AuthContext";
+import { Redirect, useRouter } from "expo-router";
 import { useColorScheme } from "nativewind";
 import React from "react";
 import {
@@ -10,57 +11,27 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import themes from "../../constants/colors";
-import { useAuth } from "../hooks/useAuth";
 
 export default function Login() {
+  const { session, signin } = useAuth();
   const router = useRouter();
   const { top } = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme as keyof typeof themes] ?? themes.light;
-  const { loginWithResponse } = useAuth();
+  // const { loginWithResponse } = useAuth(); 
+  
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       alert("Please enter both email and password");
       return;
     }
+    signin(email, password)
+  }
 
-    setLoading(true);
-
-    try {
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/auth/emailLogin`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ email, password }),
-        }
-      );
-      if (response.ok) {
-        const responseData = await response.json();
-
-        // Use the new loginWithResponse method to handle the full response
-        await loginWithResponse(responseData);
-        // Manual redirect as fallback
-        setTimeout(() => {
-          router.replace("/(tabs)");
-        }, 100);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        alert(errorData.message || `Login failed: ${response.status} - Invalid credentials`);
-      }
-    } catch (error) {
-      alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  if (session) return <Redirect href={'../(tabs)'} />
   return (
     <View
       className="flex-1"

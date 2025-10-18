@@ -1,16 +1,9 @@
+import { useAuth } from "@/context/AuthContext";
 import { Redirect } from "expo-router";
 import React from "react";
-import { useAuth } from "./hooks/useAuth";
 
 export default function Index() {
-  const { isAuthenticated, loading } = useAuth();
+  const { session } = useAuth();
 
-
-  if (loading) {
-    return null; // Root layout will show loading
-  }
-
-  // Simple one-time redirect based on auth status
-  
-  return isAuthenticated ? <Redirect href="/(tabs)" /> : <Redirect href="/(auth)/login" />;
+  return session ? <Redirect href="/(tabs)" /> : <Redirect href="/(auth)/login" />;
 }

@@ -1,47 +1,29 @@
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useColorScheme } from "nativewind";
 import React, { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
 import themes from "../constants/colors";
 import "./global.css";
-import { useAuth } from "./hooks/useAuth";
 
-export default function RootLayout() {
+function RootLayoutNav() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme as keyof typeof themes] ?? themes.light;
-  const { isAuthenticated, loading, token } = useAuth();
+  const { session } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
-  // Simplified routing - only protect tabs from unauthenticated access
   useEffect(() => {
-    
-    if (loading) {
-      return;
-    }
-
+    const inAuthGroup = segments[0] === "(auth)";
     const inTabsGroup = segments[0] === "(tabs)";
-    const actuallyAuthenticated = isAuthenticated && !!token;
 
-    // Only redirect if trying to access tabs without authentication
-    if (!actuallyAuthenticated && inTabsGroup) {
+    if (!session && inTabsGroup) {
+      // User is not authenticated but trying to access protected routes
       router.replace("/(auth)/login");
-    } else {
+    } else if (session && inAuthGroup) {
+      // User is authenticated but on auth pages
+      router.replace("/(tabs)");
     }
-  }, [isAuthenticated, loading, segments, token]);
-
-  if (loading) {
-    return (
-      <View style={{ 
-        flex: 1, 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        backgroundColor: currentTheme.background 
-      }}>
-        <ActivityIndicator size="large" color={currentTheme.primary} />
-      </View>
-    );
-  }
+  }, [session, segments]);
 
   return (
     <Stack
@@ -55,9 +37,18 @@ export default function RootLayout() {
         }
       }}
     >
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="journal/[entryId]" options={{ headerShown: false }} />
     </Stack>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <RootLayoutNav />
+    </AuthProvider>
   );
 }

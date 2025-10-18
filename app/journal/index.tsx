@@ -1,4 +1,5 @@
 import themes from '@/constants/colors'
+import { useAuth } from '@/context/AuthContext'
 import { Audio } from 'expo-av'
 import * as ImagePicker from 'expo-image-picker'
 import { router } from 'expo-router'
@@ -17,7 +18,6 @@ import {
   View
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useAuth } from '../hooks/useAuth'
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL
 
@@ -114,7 +114,8 @@ const createJournalEntry = async (entry: Omit<JournalEntry, 'id' | 'createdAt'>,
 }
 
 const PrivateJournalScreen = () => {
-  const { token } = useAuth()
+  const { session } = useAuth();
+  const token = session?.accessToken;
   const { colorScheme } = useColorScheme()
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light
   const [isNewEntryOpen, setIsNewEntryOpen] = useState(false)
