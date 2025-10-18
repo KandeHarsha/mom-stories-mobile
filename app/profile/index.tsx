@@ -1,4 +1,5 @@
 import themes from '@/constants/colors'
+import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'expo-router'
 import { ChevronRight, HelpCircle, LogIn, LogOut, Settings, Shield, User } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
@@ -13,10 +14,9 @@ import {
   View
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useAuth } from '../hooks/useAuth'
 
 const ProfileScreen = () => {
-  const { user, logout, isAuthenticated } = useAuth()
+  const { user, logout, session } = useAuth()
   const { colorScheme } = useColorScheme()
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -35,10 +35,6 @@ const ProfileScreen = () => {
             setIsLoggingOut(true)
             try {
               await logout()
-              // Force redirect to login after logout
-              setTimeout(() => {
-                router.replace('/(auth)/login')
-              }, 200)
             } catch (error) {
               Alert.alert('Error', 'Failed to logout. Please try again.')
             } finally {
@@ -106,23 +102,23 @@ const ProfileScreen = () => {
           </View>
           <View style={styles.userInfo}>
             <Text style={styles.userName}>
-              {isAuthenticated 
+              {session 
                 ? (user?.FullName || user?.FirstName || 'Welcome User')
                 : 'Not Logged In'
               }
             </Text>
             <Text style={styles.userEmail}>
-              {isAuthenticated 
+              {session 
                 ? (user?.Email?.[0]?.Value || 'No email available')
                 : 'Please login to view your profile'
               }
             </Text>
-            {isAuthenticated && user?.Company && (
+            {session && user?.Company && (
               <Text style={styles.userCompany}>
                 {user.Company}
               </Text>
             )}
-            {isAuthenticated && (user?.LocalCity || user?.LocalCountry) && (
+            {session && (user?.LocalCity || user?.LocalCountry) && (
               <Text style={styles.userLocation}>
                 {[user.LocalCity, user.LocalCountry].filter(Boolean).join(', ')}
               </Text>
@@ -154,7 +150,7 @@ const ProfileScreen = () => {
 
         {/* Login/Logout Button */}
         <View style={styles.logoutSection}>
-          {isAuthenticated ? (
+          {session ? (
             <TouchableOpacity
               style={styles.logoutButton}
               onPress={handleLogout}

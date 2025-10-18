@@ -1,4 +1,5 @@
 import themes from '@/constants/colors'
+import { useAuth } from '@/context/AuthContext'
 import { Bookmark, Send } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useRef, useState } from 'react'
@@ -14,7 +15,6 @@ import {
   View
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useAuth } from '../hooks/useAuth'
 import SavedResponses from './SavedResponses'
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL
@@ -37,7 +37,8 @@ interface Memory {
 }
 
 const AiSupportScreen = () => {
-  const { token } = useAuth()
+  const { session } = useAuth();
+  const token = session?.accessToken;
   const { colorScheme } = useColorScheme()
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light
 

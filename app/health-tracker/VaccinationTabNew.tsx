@@ -1,4 +1,5 @@
 import themes from '@/constants/colors';
+import { useAuth } from '@/context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { ChevronRight, Syringe } from 'lucide-react-native';
@@ -12,7 +13,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { useAuth } from '../hooks/useAuth';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -32,22 +32,23 @@ export default function VaccinationTabNew() {
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
   const [vaccinations, setVaccinations] = useState<MergedVaccination[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { token, loading: authLoading } = useAuth();
+  const { session } = useAuth();
+  const token = session?.accessToken
 
 
   useEffect(() => {
-    if (!authLoading && token) {
+    if ( token) {
       loadVaccinations();
     }
-  }, [token, authLoading]);
+  }, [token]);
 
   useFocusEffect(
     useCallback(() => {
       // Refresh data when screen comes into focus
-      if (!authLoading && token) {
+      if (token) {
         loadVaccinations();
       }
-    }, [token, authLoading])
+    }, [token])
   );
 
   const loadVaccinations = async () => {
@@ -124,7 +125,7 @@ export default function VaccinationTabNew() {
 
       {/* Vaccination Cards */}
       <View style={styles.vaccinationsContainer}>
-        {authLoading || isLoading ? (
+        {isLoading ? (
           <View style={styles.emptyState}>
             <Syringe size={64} color={currentTheme.mutedForeground} />
             <Text style={styles.emptyStateText}>Loading vaccinations...</Text>
