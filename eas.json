@@ -9,12 +9,18 @@
       "distribution": "internal",
       "cache": {
         "disabled": true
+      },
+      "env": {
+        "APP_VARIANT": "development"
       }
     },
     "preview": {
       "distribution": "internal",
       "cache": {
         "disabled": true
+      },
+      "env": {
+        "APP_VARIANT": "preview"
       }
     },
     "production": {
