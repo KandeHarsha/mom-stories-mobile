@@ -1,10 +1,22 @@
 import themes from '@/constants/colors';
 import { WHO_LENGTH_CM_RANGES, WHO_WEIGHT_KG_RANGES } from '@/constants/growthData';
 import { useAuth } from '@/context/AuthContext';
-import { Baby, Ruler, Scale } from 'lucide-react-native';
+import { Baby, Plus, Ruler, Scale, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -36,6 +48,13 @@ export default function BabyGrowthTab() {
   const [babyProfile, setBabyProfile] = useState<BabyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Form state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
+  const [measurementDate, setMeasurementDate] = useState(new Date().toISOString().split('T')[0]);
+  const [submitting, setSubmitting] = useState(false);
 
   const styles = createStyles(currentTheme);
 
@@ -79,6 +98,65 @@ export default function BabyGrowthTab() {
     fetchBabyProfile();
   }, [session, user]);
 
+  const handleAddMeasurement = async () => {
+    if (!weight && !height) {
+      Alert.alert('Error', 'Please enter at least weight or height');
+      return;
+    }
+
+    if (!session?.accessToken || !user?.babyId) {
+      Alert.alert('Error', 'Authentication required');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const dateISO = new Date(measurementDate).toISOString();
+
+      const body: any = { date: dateISO };
+      if (weight) body.weight = weight;
+      if (height) body.height = height;
+
+      const response = await fetch(`${API_BASE_URL}/babies/${user.babyId}/measurements`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add measurement');
+      }
+
+      // Refresh baby profile data
+      const profileResponse = await fetch(`${API_BASE_URL}/babies/${user.babyId}`, {
+        headers: {
+          'Authorization': `Bearer ${session.accessToken}`,
+        },
+      });
+
+      if (profileResponse.ok) {
+        const data = await profileResponse.json();
+        setBabyProfile(data.profile || data);
+      }
+
+      // Reset form
+      setWeight('');
+      setHeight('');
+      setMeasurementDate(new Date().toISOString().split('T')[0]);
+      setShowAddModal(false);
+
+      Alert.alert('Success', 'Measurement added successfully!');
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add measurement');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -104,7 +182,7 @@ export default function BabyGrowthTab() {
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const weeks = Math.floor(diffDays / 7);
     const months = Math.floor(diffDays / 30.44); // Average days per month
-    
+
     return { weeks, months, days: diffDays };
   };
 
@@ -112,7 +190,7 @@ export default function BabyGrowthTab() {
   const getIdealWeightRange = (weeks: number, months: number, gender: string) => {
     const genderKey = gender.toLowerCase() === 'male' ? 'boy' : 'girl';
     const ranges = WHO_WEIGHT_KG_RANGES[genderKey as 'boy' | 'girl'];
-    
+
     if (weeks <= 13) {
       const weekData = ranges.week.find((w: any) => w.week === weeks);
       return weekData ? { min: weekData.minKG, max: weekData.maxKG } : null;
@@ -125,7 +203,7 @@ export default function BabyGrowthTab() {
   const getIdealHeightRange = (weeks: number, months: number, gender: string) => {
     const genderKey = gender.toLowerCase() === 'male' ? 'boy' : 'girl';
     const ranges = WHO_LENGTH_CM_RANGES[genderKey as 'boy' | 'girl'];
-    
+
     if (weeks <= 13) {
       const weekData = ranges.week.find((w: any) => w.week === weeks);
       return weekData ? { min: weekData.minCM, max: weekData.maxCM } : null;
@@ -174,164 +252,267 @@ export default function BabyGrowthTab() {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Baby Info Header */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Baby size={24} color={currentTheme.primary} />
-          <View style={styles.headerText}>
-            <Text style={styles.cardTitle}>{babyProfile.name}'s Growth</Text>
-            <Text style={styles.cardDescription}>
-              Born: {formatDate(babyProfile.birthday)}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Weight Records Table */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Scale size={20} color={currentTheme.primary} />
-          <View style={styles.headerText}>
-            <Text style={styles.cardTitle}>Weight Records</Text>
-            <Text style={styles.cardDescription}>Tracking in kilograms (kg)</Text>
+    <>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Baby Info Header */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Baby size={24} color={currentTheme.primary} />
+            <View style={styles.headerText}>
+              <Text style={styles.cardTitle}>{babyProfile.name}'s Growth</Text>
+              <Text style={styles.cardDescription}>
+                Born: {formatDate(babyProfile.birthday)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setShowAddModal(true)}
+            >
+              <Plus size={20} color={currentTheme.primaryForeground} />
+            </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.cardContent}>
-          {/* Table Header */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText, { flex: 1.2 }]}>Date</Text>
-            <Text style={[styles.tableHeaderText, { flex: 0.8 }]}>Age</Text>
-            <Text style={[styles.tableHeaderText, { flex: 1 }]}>Weight</Text>
-            <Text style={[styles.tableHeaderText, { flex: 1.5 }]}>Ideal Range</Text>
+        {/* Weight Records Table */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Scale size={20} color={currentTheme.primary} />
+            <View style={styles.headerText}>
+              <Text style={styles.cardTitle}>Weight Records</Text>
+              <Text style={styles.cardDescription}>Tracking in kilograms (kg)</Text>
+            </View>
           </View>
 
-          {/* Table Rows */}
-          <View style={styles.dataContainer}>
-            {sortedWeight.map((entry, index) => {
-              const age = calculateAge(babyProfile.birthday, entry.date);
-              const idealRange = getIdealWeightRange(age.weeks, age.months, babyProfile.gender);
-              const inRange = isInRange(entry.value, idealRange);
+          <View style={styles.cardContent}>
+            {/* Table Header */}
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderText, { flex: 1.2 }]}>Date</Text>
+              <Text style={[styles.tableHeaderText, { flex: 0.8 }]}>Age</Text>
+              <Text style={[styles.tableHeaderText, { flex: 1 }]}>Weight</Text>
+              <Text style={[styles.tableHeaderText, { flex: 1.5 }]}>Ideal Range</Text>
+            </View>
 
-              return (
-                <View key={`weight-${entry.date}-${index}`} style={styles.tableRow}>
-                  <Text style={[styles.tableCellText, { flex: 1.2 }]}>
-                    {formatDate(entry.date)}
-                  </Text>
-                  <Text style={[styles.tableCellText, { flex: 0.8 }]}>
-                    {formatAge(age.weeks, age.months)}
-                  </Text>
-                  <Text style={[styles.tableCellValue, { flex: 1, color: inRange ? currentTheme.cardForeground : currentTheme.destructive }]}>
-                    {entry.value} kg
-                  </Text>
-                  <Text style={[styles.tableCellRange, { flex: 1.5 }]}>
-                    {idealRange ? `${idealRange.min}-${idealRange.max} kg` : 'N/A'}
-                  </Text>
+            {/* Table Rows */}
+            <View style={styles.dataContainer}>
+              {sortedWeight.map((entry, index) => {
+                const age = calculateAge(babyProfile.birthday, entry.date);
+                const idealRange = getIdealWeightRange(age.weeks, age.months, babyProfile.gender);
+                const inRange = isInRange(entry.value, idealRange);
+
+                return (
+                  <View key={`weight-${entry.date}-${index}`} style={styles.tableRow}>
+                    <Text style={[styles.tableCellText, { flex: 1.2 }]}>
+                      {formatDate(entry.date)}
+                    </Text>
+                    <Text style={[styles.tableCellText, { flex: 0.8 }]}>
+                      {formatAge(age.weeks, age.months)}
+                    </Text>
+                    <Text style={[styles.tableCellValue, { flex: 1, color: inRange ? currentTheme.cardForeground : currentTheme.destructive }]}>
+                      {entry.value} kg
+                    </Text>
+                    <Text style={[styles.tableCellRange, { flex: 1.5 }]}>
+                      {idealRange ? `${idealRange.min}-${idealRange.max} kg` : 'N/A'}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* Height Records Table */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ruler size={20} color={currentTheme.primary} />
+            <View style={styles.headerText}>
+              <Text style={styles.cardTitle}>Height Records</Text>
+              <Text style={styles.cardDescription}>Tracking in centimeters (cm)</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardContent}>
+            {/* Table Header */}
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderText, { flex: 1.2 }]}>Date</Text>
+              <Text style={[styles.tableHeaderText, { flex: 0.8 }]}>Age</Text>
+              <Text style={[styles.tableHeaderText, { flex: 1 }]}>Height</Text>
+              <Text style={[styles.tableHeaderText, { flex: 1.5 }]}>Ideal Range</Text>
+            </View>
+
+            {/* Table Rows */}
+            <View style={styles.dataContainer}>
+              {sortedHeight.map((entry, index) => {
+                const age = calculateAge(babyProfile.birthday, entry.date);
+                const idealRange = getIdealHeightRange(age.weeks, age.months, babyProfile.gender);
+                const inRange = isInRange(entry.value, idealRange);
+
+                return (
+                  <View key={`height-${entry.date}-${index}`} style={styles.tableRow}>
+                    <Text style={[styles.tableCellText, { flex: 1.2 }]}>
+                      {formatDate(entry.date)}
+                    </Text>
+                    <Text style={[styles.tableCellText, { flex: 0.8 }]}>
+                      {formatAge(age.weeks, age.months)}
+                    </Text>
+                    <Text style={[styles.tableCellValue, { flex: 1, color: inRange ? currentTheme.cardForeground : currentTheme.destructive }]}>
+                      {entry.value} cm
+                    </Text>
+                    <Text style={[styles.tableCellRange, { flex: 1.5 }]}>
+                      {idealRange ? `${idealRange.min}-${idealRange.max} cm` : 'N/A'}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* Growth Summary Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Growth Summary</Text>
+          </View>
+          <View style={styles.cardContent}>
+            <View style={styles.summaryContainer}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Birth Weight</Text>
+                <Text style={styles.summaryValue}>
+                  {firstWeight ? `${firstWeight.value} kg` : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Current Weight</Text>
+                <Text style={styles.summaryValue}>
+                  {lastWeight ? `${lastWeight.value} kg` : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Weight Gain</Text>
+                <Text style={[styles.summaryValue, { color: currentTheme.primary }]}>
+                  {weightGain > 0 ? `+${weightGain.toFixed(1)} kg` : '-'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.summaryContainer}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Birth Height</Text>
+                <Text style={styles.summaryValue}>
+                  {firstHeight ? `${firstHeight.value} cm` : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Current Height</Text>
+                <Text style={styles.summaryValue}>
+                  {lastHeight ? `${lastHeight.value} cm` : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Growth</Text>
+                <Text style={[styles.summaryValue, { color: '#10b981' }]}>
+                  {heightGrowth > 0 ? `+${heightGrowth.toFixed(1)} cm` : '-'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Add Measurement Modal */}
+      <Modal
+        visible={showAddModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowAddModal(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.modalContent}
+            >
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Measurement</Text>
+                <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                  <X size={24} color={currentTheme.foreground} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Form */}
+              <ScrollView
+                style={styles.formContainer}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Weight (kg)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 5.5"
+                    value={weight}
+                    onChangeText={setWeight}
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
                 </View>
-              );
-            })}
-          </View>
-        </View>
-      </View>
 
-      {/* Height Records Table */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Ruler size={20} color={currentTheme.primary} />
-          <View style={styles.headerText}>
-            <Text style={styles.cardTitle}>Height Records</Text>
-            <Text style={styles.cardDescription}>Tracking in centimeters (cm)</Text>
-          </View>
-        </View>
-
-        <View style={styles.cardContent}>
-          {/* Table Header */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText, { flex: 1.2 }]}>Date</Text>
-            <Text style={[styles.tableHeaderText, { flex: 0.8 }]}>Age</Text>
-            <Text style={[styles.tableHeaderText, { flex: 1 }]}>Height</Text>
-            <Text style={[styles.tableHeaderText, { flex: 1.5 }]}>Ideal Range</Text>
-          </View>
-
-          {/* Table Rows */}
-          <View style={styles.dataContainer}>
-            {sortedHeight.map((entry, index) => {
-              const age = calculateAge(babyProfile.birthday, entry.date);
-              const idealRange = getIdealHeightRange(age.weeks, age.months, babyProfile.gender);
-              const inRange = isInRange(entry.value, idealRange);
-
-              return (
-                <View key={`height-${entry.date}-${index}`} style={styles.tableRow}>
-                  <Text style={[styles.tableCellText, { flex: 1.2 }]}>
-                    {formatDate(entry.date)}
-                  </Text>
-                  <Text style={[styles.tableCellText, { flex: 0.8 }]}>
-                    {formatAge(age.weeks, age.months)}
-                  </Text>
-                  <Text style={[styles.tableCellValue, { flex: 1, color: inRange ? currentTheme.cardForeground : currentTheme.destructive }]}>
-                    {entry.value} cm
-                  </Text>
-                  <Text style={[styles.tableCellRange, { flex: 1.5 }]}>
-                    {idealRange ? `${idealRange.min}-${idealRange.max} cm` : 'N/A'}
-                  </Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Height (cm)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 65"
+                    value={height}
+                    onChangeText={setHeight}
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
                 </View>
-              );
-            })}
-          </View>
-        </View>
-      </View>
 
-      {/* Growth Summary Card */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Growth Summary</Text>
-        </View>
-        <View style={styles.cardContent}>
-          <View style={styles.summaryContainer}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Birth Weight</Text>
-              <Text style={styles.summaryValue}>
-                {firstWeight ? `${firstWeight.value} kg` : '-'}
-              </Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Current Weight</Text>
-              <Text style={styles.summaryValue}>
-                {lastWeight ? `${lastWeight.value} kg` : '-'}
-              </Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Weight Gain</Text>
-              <Text style={[styles.summaryValue, { color: currentTheme.primary }]}>
-                {weightGain > 0 ? `+${weightGain.toFixed(1)} kg` : '-'}
-              </Text>
-            </View>
-          </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Date (YYYY-MM-DD)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="2025-01-20"
+                    value={measurementDate}
+                    onChangeText={setMeasurementDate}
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
 
-          <View style={styles.summaryContainer}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Birth Height</Text>
-              <Text style={styles.summaryValue}>
-                {firstHeight ? `${firstHeight.value} cm` : '-'}
-              </Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Current Height</Text>
-              <Text style={styles.summaryValue}>
-                {lastHeight ? `${lastHeight.value} cm` : '-'}
-              </Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Growth</Text>
-              <Text style={[styles.summaryValue, { color: '#10b981' }]}>
-                {heightGrowth > 0 ? `+${heightGrowth.toFixed(1)} cm` : '-'}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    </ScrollView>
+                {/* Action Buttons */}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setShowAddModal(false)}
+                    disabled={submitting}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+                    onPress={handleAddMeasurement}
+                    disabled={submitting}
+                  >
+                    <Text style={styles.submitButtonText}>
+                      {submitting ? 'Adding...' : 'Add Measurement'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
@@ -451,5 +632,92 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: theme.cardForeground,
+  },
+  addButton: {
+    backgroundColor: theme.primary,
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: theme.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: theme.foreground,
+  },
+  formContainer: {
+    padding: 20,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.foreground,
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: theme.card,
+    color: theme.cardForeground,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: theme.muted,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: theme.foreground,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  submitButton: {
+    flex: 1,
+    backgroundColor: theme.primary,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
+  },
+  submitButtonText: {
+    color: theme.primaryForeground,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
