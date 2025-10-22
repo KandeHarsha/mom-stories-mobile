@@ -107,7 +107,7 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
     setLoading(true)
     try {
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/profile`,
+        `${process.env.EXPO_PUBLIC_API_URL}/user`,
         {
           method: "GET",
           headers: {
