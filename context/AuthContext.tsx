@@ -78,12 +78,12 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
         await SecureStore.setItemAsync('accessToken', responseData.data.access_token);
         await SecureStore.setItemAsync('refreshToken', responseData.data.refresh_token);
         await SecureStore.setItemAsync('tokenExpiry', responseData.data.expires_in);
-        
+
         setUser(responseData.data.Profile || null)
 
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.message || `Login failed: ${response.status} - Invalid credentials`);
+        alert(errorData.error || errorData.message || 'Login failed. Please check your credentials.');
       }
     } catch (error) {
       alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -118,12 +118,12 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
       );
       if (response.ok) {
         const responseData = await response.json();
-        setUser(responseData|| null)
-        setSession({accessToken: accessToken as string})
+        setUser(responseData || null)
+        setSession({ accessToken: accessToken as string })
 
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.message || `Login failed: ${response.status} - Invalid credentials`);
+        alert(errorData.error || errorData.message || 'Failed to fetch user data.');
       }
     } catch (error) {
       alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);

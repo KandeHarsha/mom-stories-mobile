@@ -56,6 +56,15 @@ export default function BabyGrowthTab() {
   const [measurementDate, setMeasurementDate] = useState(new Date().toISOString().split('T')[0]);
   const [submitting, setSubmitting] = useState(false);
 
+  // Create profile state
+  const [showCreateProfile, setShowCreateProfile] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileGender, setProfileGender] = useState('Male');
+  const [profileBirthday, setProfileBirthday] = useState('');
+  const [profileBirthWeight, setProfileBirthWeight] = useState('');
+  const [profileBirthHeight, setProfileBirthHeight] = useState('');
+  const [creatingProfile, setCreatingProfile] = useState(false);
+
   const styles = createStyles(currentTheme);
 
   useEffect(() => {
@@ -67,16 +76,16 @@ export default function BabyGrowthTab() {
       }
 
       try {
-        // Get babyId from user profile
-        const babyId = user?.babyId;
+        // Get childId from user profile
+        const childId = user?.childId;
 
-        if (!babyId) {
+        if (!childId) {
           setError('No baby profile selected');
           setLoading(false);
           return;
         }
 
-        const response = await fetch(`${API_BASE_URL}/babies/${babyId}`, {
+        const response = await fetch(`${API_BASE_URL}/children/${childId}`, {
           headers: {
             'Authorization': `Bearer ${session.accessToken}`,
           },
@@ -98,14 +107,71 @@ export default function BabyGrowthTab() {
     fetchBabyProfile();
   }, [session, user]);
 
+  const handleCreateProfile = async () => {
+    if (!profileName || !profileBirthday || !profileBirthWeight || !profileBirthHeight) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    if (!session?.accessToken) {
+      Alert.alert('Error', 'Authentication required');
+      return;
+    }
+
+    setCreatingProfile(true);
+
+    try {
+      const birthdayISO = new Date(profileBirthday).toISOString();
+
+      const body = {
+        name: profileName,
+        birthday: birthdayISO,
+        birthWeight: profileBirthWeight,
+        birthHeight: profileBirthHeight,
+        gender: profileGender,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/children`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || 'Failed to create profile');
+      }
+
+      const data = await response.json();
+      setBabyProfile(data.profile);
+      setShowCreateProfile(false);
+      setError(null);
+
+      Alert.alert('Success', data.message || 'Child profile created successfully!');
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create profile');
+    } finally {
+      setCreatingProfile(false);
+    }
+  };
+
   const handleAddMeasurement = async () => {
     if (!weight && !height) {
       Alert.alert('Error', 'Please enter at least weight or height');
       return;
     }
 
-    if (!session?.accessToken || !user?.babyId) {
+    if (!session?.accessToken) {
       Alert.alert('Error', 'Authentication required');
+      return;
+    }
+
+    const childId = user?.childId || babyProfile?.id;
+    if (!childId) {
+      Alert.alert('Error', 'No child profile found');
       return;
     }
 
@@ -118,7 +184,7 @@ export default function BabyGrowthTab() {
       if (weight) body.weight = weight;
       if (height) body.height = height;
 
-      const response = await fetch(`${API_BASE_URL}/babies/${user.babyId}/measurements`, {
+      const response = await fetch(`${API_BASE_URL}/children/${childId}/measurements`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.accessToken}`,
@@ -132,7 +198,7 @@ export default function BabyGrowthTab() {
       }
 
       // Refresh baby profile data
-      const profileResponse = await fetch(`${API_BASE_URL}/babies/${user.babyId}`, {
+      const profileResponse = await fetch(`${API_BASE_URL}/children/${childId}`, {
         headers: {
           'Authorization': `Bearer ${session.accessToken}`,
         },
@@ -157,102 +223,117 @@ export default function BabyGrowthTab() {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color={currentTheme.primary} />
-        <Text style={styles.loadingText}>Loading growth data...</Text>
-      </View>
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <View style={[styles.container, styles.centerContent]}>
+          <ActivityIndicator size="large" color={currentTheme.primary} />
+          <Text style={styles.loadingText}>Loading growth data...</Text>
+        </View>
+      );
+    }
+
+    if (error || !babyProfile) {
+      return (
+        <View style={[styles.container, styles.centerContent]}>
+          <Baby size={64} color={currentTheme.mutedForeground} />
+          <Text style={styles.errorText}>{error || 'No child profile found'}</Text>
+          <Text style={styles.errorSubtext}>Create a profile to start tracking growth</Text>
+          <TouchableOpacity
+            style={styles.createProfileButton}
+            onPress={() => setShowCreateProfile(true)}
+          >
+            <Plus size={20} color={currentTheme.primaryForeground} />
+            <Text style={styles.createProfileButtonText}>Create Child Profile</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return renderBabyProfile();
+  };
+
+  const renderBabyProfile = () => {
+    if (!babyProfile) return null;
+
+    // Calculate baby's age in weeks/months
+    const calculateAge = (birthday: string, measurementDate: string) => {
+      const birthDate = new Date(birthday);
+      const measDate = new Date(measurementDate);
+      const diffMs = measDate.getTime() - birthDate.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const weeks = Math.floor(diffDays / 7);
+      const months = Math.floor(diffDays / 30.44); // Average days per month
+
+      return { weeks, months, days: diffDays };
+    };
+
+    // Get ideal range based on age and gender
+    const getIdealWeightRange = (weeks: number, months: number, gender: string) => {
+      const genderKey = gender.toLowerCase() === 'male' ? 'boy' : 'girl';
+      const ranges = WHO_WEIGHT_KG_RANGES[genderKey as 'boy' | 'girl'];
+
+      if (weeks <= 13) {
+        const weekData = ranges.week.find((w: any) => w.week === weeks);
+        return weekData ? { min: weekData.minKG, max: weekData.maxKG } : null;
+      } else {
+        const monthData = ranges.month.find((m: any) => m.month === months);
+        return monthData ? { min: monthData.minKG, max: monthData.maxKG } : null;
+      }
+    };
+
+    const getIdealHeightRange = (weeks: number, months: number, gender: string) => {
+      const genderKey = gender.toLowerCase() === 'male' ? 'boy' : 'girl';
+      const ranges = WHO_LENGTH_CM_RANGES[genderKey as 'boy' | 'girl'];
+
+      if (weeks <= 13) {
+        const weekData = ranges.week.find((w: any) => w.week === weeks);
+        return weekData ? { min: weekData.minCM, max: weekData.maxCM } : null;
+      } else {
+        const monthData = ranges.month.find((m: any) => m.month === months);
+        return monthData ? { min: monthData.minCM, max: monthData.maxCM } : null;
+      }
+    };
+
+    // Check if value is within range
+    const isInRange = (value: number, range: { min: number; max: number } | null) => {
+      if (!range) return true;
+      return value >= range.min && value <= range.max;
+    };
+
+    // Sort weight and height by date
+    const sortedWeight = [...babyProfile.weight].sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
     );
-  }
-
-  if (error || !babyProfile) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.errorText}>{error || 'No baby profile found'}</Text>
-      </View>
+    const sortedHeight = [...babyProfile.height].sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
     );
-  }
 
-  // Calculate baby's age in weeks/months
-  const calculateAge = (birthday: string, measurementDate: string) => {
-    const birthDate = new Date(birthday);
-    const measDate = new Date(measurementDate);
-    const diffMs = measDate.getTime() - birthDate.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const weeks = Math.floor(diffDays / 7);
-    const months = Math.floor(diffDays / 30.44); // Average days per month
+    // Get first and last entries for summary
+    const firstWeight = sortedWeight[0];
+    const lastWeight = sortedWeight[sortedWeight.length - 1];
+    const firstHeight = sortedHeight[0];
+    const lastHeight = sortedHeight[sortedHeight.length - 1];
 
-    return { weeks, months, days: diffDays };
-  };
+    const weightGain = lastWeight && firstWeight ? lastWeight.value - firstWeight.value : 0;
+    const heightGrowth = lastHeight && firstHeight ? lastHeight.value - firstHeight.value : 0;
 
-  // Get ideal range based on age and gender
-  const getIdealWeightRange = (weeks: number, months: number, gender: string) => {
-    const genderKey = gender.toLowerCase() === 'male' ? 'boy' : 'girl';
-    const ranges = WHO_WEIGHT_KG_RANGES[genderKey as 'boy' | 'girl'];
+    // Format date for display
+    const formatDate = (dateString: string) => {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
 
-    if (weeks <= 13) {
-      const weekData = ranges.week.find((w: any) => w.week === weeks);
-      return weekData ? { min: weekData.minKG, max: weekData.maxKG } : null;
-    } else {
-      const monthData = ranges.month.find((m: any) => m.month === months);
-      return monthData ? { min: monthData.minKG, max: monthData.maxKG } : null;
-    }
-  };
+    // Format age display
+    const formatAge = (weeks: number, months: number) => {
+      if (weeks <= 13) {
+        return `${weeks}w`;
+      } else {
+        return `${months}m`;
+      }
+    };
 
-  const getIdealHeightRange = (weeks: number, months: number, gender: string) => {
-    const genderKey = gender.toLowerCase() === 'male' ? 'boy' : 'girl';
-    const ranges = WHO_LENGTH_CM_RANGES[genderKey as 'boy' | 'girl'];
-
-    if (weeks <= 13) {
-      const weekData = ranges.week.find((w: any) => w.week === weeks);
-      return weekData ? { min: weekData.minCM, max: weekData.maxCM } : null;
-    } else {
-      const monthData = ranges.month.find((m: any) => m.month === months);
-      return monthData ? { min: monthData.minCM, max: monthData.maxCM } : null;
-    }
-  };
-
-  // Check if value is within range
-  const isInRange = (value: number, range: { min: number; max: number } | null) => {
-    if (!range) return true;
-    return value >= range.min && value <= range.max;
-  };
-
-  // Sort weight and height by date
-  const sortedWeight = [...babyProfile.weight].sort((a, b) =>
-    new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
-  const sortedHeight = [...babyProfile.height].sort((a, b) =>
-    new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
-
-  // Get first and last entries for summary
-  const firstWeight = sortedWeight[0];
-  const lastWeight = sortedWeight[sortedWeight.length - 1];
-  const firstHeight = sortedHeight[0];
-  const lastHeight = sortedHeight[sortedHeight.length - 1];
-
-  const weightGain = lastWeight && firstWeight ? lastWeight.value - firstWeight.value : 0;
-  const heightGrowth = lastHeight && firstHeight ? lastHeight.value - firstHeight.value : 0;
-
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  // Format age display
-  const formatAge = (weeks: number, months: number) => {
-    if (weeks <= 13) {
-      return `${weeks}w`;
-    } else {
-      return `${months}m`;
-    }
-  };
-
-  return (
-    <>
+    return (
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Baby Info Header */}
         <View style={styles.card}>
@@ -417,6 +498,12 @@ export default function BabyGrowthTab() {
           </View>
         </View>
       </ScrollView>
+    );
+  };
+
+  return (
+    <>
+      {renderContent()}
 
       {/* Add Measurement Modal */}
       <Modal
@@ -512,6 +599,147 @@ export default function BabyGrowthTab() {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Create Profile Modal */}
+      <Modal
+        visible={showCreateProfile}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCreateProfile(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowCreateProfile(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.modalContent}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Create Child Profile</Text>
+                <TouchableOpacity onPress={() => setShowCreateProfile(false)}>
+                  <X size={24} color={currentTheme.foreground} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.formContainer}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Name *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., Leo"
+                    value={profileName}
+                    onChangeText={setProfileName}
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Gender *</Text>
+                  <View style={styles.genderContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.genderButton,
+                        profileGender === 'Male' && styles.genderButtonActive,
+                      ]}
+                      onPress={() => setProfileGender('Male')}
+                    >
+                      <Text
+                        style={[
+                          styles.genderButtonText,
+                          profileGender === 'Male' && styles.genderButtonTextActive,
+                        ]}
+                      >
+                        Male
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.genderButton,
+                        profileGender === 'Female' && styles.genderButtonActive,
+                      ]}
+                      onPress={() => setProfileGender('Female')}
+                    >
+                      <Text
+                        style={[
+                          styles.genderButtonText,
+                          profileGender === 'Female' && styles.genderButtonTextActive,
+                        ]}
+                      >
+                        Female
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Birthday (YYYY-MM-DD) *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 2025-09-30"
+                    value={profileBirthday}
+                    onChangeText={setProfileBirthday}
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Birth Weight (kg) *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 3.4"
+                    value={profileBirthWeight}
+                    onChangeText={setProfileBirthWeight}
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Birth Height (cm) *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 50"
+                    value={profileBirthHeight}
+                    onChangeText={setProfileBirthHeight}
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setShowCreateProfile(false)}
+                    disabled={creatingProfile}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.submitButton, creatingProfile && styles.submitButtonDisabled]}
+                    onPress={handleCreateProfile}
+                    disabled={creatingProfile}
+                  >
+                    <Text style={styles.submitButtonText}>
+                      {creatingProfile ? 'Creating...' : 'Create Profile'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
     </>
   );
 }
@@ -533,9 +761,57 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.mutedForeground,
   },
   errorText: {
-    fontSize: 16,
-    color: theme.destructive,
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.foreground,
     textAlign: 'center',
+    marginTop: 16,
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: theme.mutedForeground,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  createProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 8,
+  },
+  createProfileButtonText: {
+    color: theme.primaryForeground,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  genderContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  genderButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.card,
+    alignItems: 'center',
+  },
+  genderButtonActive: {
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
+  },
+  genderButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.cardForeground,
+  },
+  genderButtonTextActive: {
+    color: theme.primaryForeground,
   },
   card: {
     backgroundColor: theme.card,
