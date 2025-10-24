@@ -1,6 +1,5 @@
 import { fetchAccessToken } from '@/app/utils';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-// import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useState } from "react"; // Explicitly import React
 import { Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -76,21 +75,15 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
           tokenExpiry: responseData.data.expires_in || "",
         })
 
-        // await SecureStore.setItemAsync('accessToken', 'responseData.data.access_token');
-        // await SecureStore.setItemAsync('refreshToken', 'responseData.data.refresh_token');
-        // await SecureStore.setItemAsync('tokenExpiry', 'responseData.data.expires_in');
-
-        await AsyncStorage.setItem('accessToken', 'responseData.data.access_token');
-        await AsyncStorage.setItem('refreshToken', 'responseData.data.refresh_token');
-        await AsyncStorage.setItem('tokenExpiry', 'responseData.data.expires_in');
-
-        
+        await SecureStore.setItemAsync('accessToken', responseData.data.access_token);
+        await SecureStore.setItemAsync('refreshToken', responseData.data.refresh_token);
+        await SecureStore.setItemAsync('tokenExpiry', responseData.data.expires_in);
 
         setUser(responseData.data.Profile || null)
 
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.message || `Login failed: ${response.status} - Invalid credentials`);
+        alert(errorData.error || errorData.message || 'Login failed. Please check your credentials.');
       }
     } catch (error) {
       alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -104,9 +97,9 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
     setLoading(true)
     setSession(null)
     setUser(null)
-    await AsyncStorage.removeItem("accessToken");
-    await AsyncStorage.removeItem("refreshToken");
-    await AsyncStorage.removeItem("tokenExpiry");
+    await SecureStore.deleteItemAsync('accessToken');
+    await SecureStore.deleteItemAsync('refreshToken');
+    await SecureStore.deleteItemAsync('tokenExpiry');
     setLoading(false)
   };
 
@@ -114,7 +107,7 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
     setLoading(true)
     try {
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/profile`,
+        `${process.env.EXPO_PUBLIC_API_URL}/user`,
         {
           method: "GET",
           headers: {
@@ -125,12 +118,12 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
       );
       if (response.ok) {
         const responseData = await response.json();
-        setUser(responseData|| null)
-        setSession({accessToken: accessToken as string})
+        setUser(responseData || null)
+        setSession({ accessToken: accessToken as string })
 
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.message || `Login failed: ${response.status} - Invalid credentials`);
+        alert(errorData.error || errorData.message || 'Failed to fetch user data.');
       }
     } catch (error) {
       alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -170,3 +163,4 @@ const useAuth = () => {
 
 
 export { AuthContext, AuthProvider, useAuth };
+

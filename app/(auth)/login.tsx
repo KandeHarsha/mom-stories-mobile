@@ -7,7 +7,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import themes from "../../constants/colors";
@@ -19,7 +19,7 @@ export default function Login() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme as keyof typeof themes] ?? themes.light;
   // const { loginWithResponse } = useAuth(); 
-  
+
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -88,6 +88,18 @@ export default function Login() {
               Login
             </Text>
           )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          className="mt-4"
+          onPress={() => router.push("/(auth)/register")}
+        >
+          <Text
+            className="text-base"
+            style={{ color: currentTheme.mutedForeground }}
+          >
+            Don't have an account?{" "}
+            <Text style={{ color: currentTheme.primary }}>Register</Text>
+          </Text>
         </TouchableOpacity>
       </View>
     </View>

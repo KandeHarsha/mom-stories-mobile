@@ -1,10 +1,9 @@
-// Temporarily using AsyncStorage instead of SecureStore
-// TODO: Switch back to SecureStore after rebuilding the app
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+
 
 export const fetchAccessToken = async (): Promise<string | null> => {
     try {
-        const token = await AsyncStorage.getItem('accessToken');
+        const token = await SecureStore.getItemAsync('accessToken');
         return token;
     } catch (error) {
         console.error('Error fetching access token:', error);

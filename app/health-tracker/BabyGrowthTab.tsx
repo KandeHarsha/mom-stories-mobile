@@ -1,100 +1,746 @@
 import themes from '@/constants/colors';
-import { Baby } from 'lucide-react-native';
+import { WHO_LENGTH_CM_RANGES, WHO_WEIGHT_KG_RANGES } from '@/constants/growthData';
+import { useAuth } from '@/context/AuthContext';
+import { Baby, Plus, Ruler, Scale, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import React from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
-const growthData = [
-  { month: 'Birth', weight: 7.5, length: 20 },
-  { month: '1m', weight: 9.9, length: 21.5 },
-  { month: '2m', weight: 12.4, length: 23 },
-  { month: '4m', weight: 15.5, length: 25 },
-  { month: '6m', weight: 17.5, length: 26.5 },
-  { month: '9m', weight: 20, length: 28 },
-  { month: '12m', weight: 22, length: 29.5 },
-];
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
+interface WeightEntry {
+  value: number;
+  date: string;
+}
+
+interface HeightEntry {
+  value: number;
+  date: string;
+}
+
+interface BabyProfile {
+  id: string;
+  parentId: string;
+  name: string;
+  gender: string;
+  birthday: string;
+  createdAt: string;
+  height: HeightEntry[];
+  weight: WeightEntry[];
+}
 
 export default function BabyGrowthTab() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
-  const screenWidth = Dimensions.get('window').width;
+  const { session, user } = useAuth();
+  const [babyProfile, setBabyProfile] = useState<BabyProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Form state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
+  const [measurementDate, setMeasurementDate] = useState(new Date().toISOString().split('T')[0]);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Create profile state
+  const [showCreateProfile, setShowCreateProfile] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileGender, setProfileGender] = useState('Male');
+  const [profileBirthday, setProfileBirthday] = useState('');
+  const [profileBirthWeight, setProfileBirthWeight] = useState('');
+  const [profileBirthHeight, setProfileBirthHeight] = useState('');
+  const [creatingProfile, setCreatingProfile] = useState(false);
 
   const styles = createStyles(currentTheme);
 
-  return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Growth Chart Card */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Baby size={24} color={currentTheme.primary} />
-          <View style={styles.headerText}>
-            <Text style={styles.cardTitle}>Baby's Growth Milestones</Text>
-            <Text style={styles.cardDescription}>Weight and length over the first year</Text>
+  useEffect(() => {
+    const fetchBabyProfile = async () => {
+      if (!session?.accessToken) {
+        setError('Not authenticated');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Get childId from user profile
+        const childId = user?.childId;
+
+        if (!childId) {
+          setError('No baby profile selected');
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/children/${childId}`, {
+          headers: {
+            'Authorization': `Bearer ${session.accessToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch baby profile');
+        }
+
+        const data = await response.json();
+        setBabyProfile(data.profile || data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBabyProfile();
+  }, [session, user]);
+
+  const handleCreateProfile = async () => {
+    if (!profileName || !profileBirthday || !profileBirthWeight || !profileBirthHeight) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    if (!session?.accessToken) {
+      Alert.alert('Error', 'Authentication required');
+      return;
+    }
+
+    setCreatingProfile(true);
+
+    try {
+      const birthdayISO = new Date(profileBirthday).toISOString();
+
+      const body = {
+        name: profileName,
+        birthday: birthdayISO,
+        birthWeight: profileBirthWeight,
+        birthHeight: profileBirthHeight,
+        gender: profileGender,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/children`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || 'Failed to create profile');
+      }
+
+      const data = await response.json();
+      setBabyProfile(data.profile);
+      setShowCreateProfile(false);
+      setError(null);
+
+      Alert.alert('Success', data.message || 'Child profile created successfully!');
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create profile');
+    } finally {
+      setCreatingProfile(false);
+    }
+  };
+
+  const handleAddMeasurement = async () => {
+    if (!weight && !height) {
+      Alert.alert('Error', 'Please enter at least weight or height');
+      return;
+    }
+
+    if (!session?.accessToken) {
+      Alert.alert('Error', 'Authentication required');
+      return;
+    }
+
+    const childId = user?.childId || babyProfile?.id;
+    if (!childId) {
+      Alert.alert('Error', 'No child profile found');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const dateISO = new Date(measurementDate).toISOString();
+
+      const body: any = { date: dateISO };
+      if (weight) body.weight = weight;
+      if (height) body.height = height;
+
+      const response = await fetch(`${API_BASE_URL}/children/${childId}/measurements`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add measurement');
+      }
+
+      // Refresh baby profile data
+      const profileResponse = await fetch(`${API_BASE_URL}/children/${childId}`, {
+        headers: {
+          'Authorization': `Bearer ${session.accessToken}`,
+        },
+      });
+
+      if (profileResponse.ok) {
+        const data = await profileResponse.json();
+        setBabyProfile(data.profile || data);
+      }
+
+      // Reset form
+      setWeight('');
+      setHeight('');
+      setMeasurementDate(new Date().toISOString().split('T')[0]);
+      setShowAddModal(false);
+
+      Alert.alert('Success', 'Measurement added successfully!');
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add measurement');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <View style={[styles.container, styles.centerContent]}>
+          <ActivityIndicator size="large" color={currentTheme.primary} />
+          <Text style={styles.loadingText}>Loading growth data...</Text>
+        </View>
+      );
+    }
+
+    if (error || !babyProfile) {
+      return (
+        <View style={[styles.container, styles.centerContent]}>
+          <Baby size={64} color={currentTheme.mutedForeground} />
+          <Text style={styles.errorText}>{error || 'No child profile found'}</Text>
+          <Text style={styles.errorSubtext}>Create a profile to start tracking growth</Text>
+          <TouchableOpacity
+            style={styles.createProfileButton}
+            onPress={() => setShowCreateProfile(true)}
+          >
+            <Plus size={20} color={currentTheme.primaryForeground} />
+            <Text style={styles.createProfileButtonText}>Create Child Profile</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return renderBabyProfile();
+  };
+
+  const renderBabyProfile = () => {
+    if (!babyProfile) return null;
+
+    // Calculate baby's age in weeks/months
+    const calculateAge = (birthday: string, measurementDate: string) => {
+      const birthDate = new Date(birthday);
+      const measDate = new Date(measurementDate);
+      const diffMs = measDate.getTime() - birthDate.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const weeks = Math.floor(diffDays / 7);
+      const months = Math.floor(diffDays / 30.44); // Average days per month
+
+      return { weeks, months, days: diffDays };
+    };
+
+    // Get ideal range based on age and gender
+    const getIdealWeightRange = (weeks: number, months: number, gender: string) => {
+      const genderKey = gender.toLowerCase() === 'male' ? 'boy' : 'girl';
+      const ranges = WHO_WEIGHT_KG_RANGES[genderKey as 'boy' | 'girl'];
+
+      if (weeks <= 13) {
+        const weekData = ranges.week.find((w: any) => w.week === weeks);
+        return weekData ? { min: weekData.minKG, max: weekData.maxKG } : null;
+      } else {
+        const monthData = ranges.month.find((m: any) => m.month === months);
+        return monthData ? { min: monthData.minKG, max: monthData.maxKG } : null;
+      }
+    };
+
+    const getIdealHeightRange = (weeks: number, months: number, gender: string) => {
+      const genderKey = gender.toLowerCase() === 'male' ? 'boy' : 'girl';
+      const ranges = WHO_LENGTH_CM_RANGES[genderKey as 'boy' | 'girl'];
+
+      if (weeks <= 13) {
+        const weekData = ranges.week.find((w: any) => w.week === weeks);
+        return weekData ? { min: weekData.minCM, max: weekData.maxCM } : null;
+      } else {
+        const monthData = ranges.month.find((m: any) => m.month === months);
+        return monthData ? { min: monthData.minCM, max: monthData.maxCM } : null;
+      }
+    };
+
+    // Check if value is within range
+    const isInRange = (value: number, range: { min: number; max: number } | null) => {
+      if (!range) return true;
+      return value >= range.min && value <= range.max;
+    };
+
+    // Sort weight and height by date
+    const sortedWeight = [...babyProfile.weight].sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    const sortedHeight = [...babyProfile.height].sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    // Get first and last entries for summary
+    const firstWeight = sortedWeight[0];
+    const lastWeight = sortedWeight[sortedWeight.length - 1];
+    const firstHeight = sortedHeight[0];
+    const lastHeight = sortedHeight[sortedHeight.length - 1];
+
+    const weightGain = lastWeight && firstWeight ? lastWeight.value - firstWeight.value : 0;
+    const heightGrowth = lastHeight && firstHeight ? lastHeight.value - firstHeight.value : 0;
+
+    // Format date for display
+    const formatDate = (dateString: string) => {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
+    // Format age display
+    const formatAge = (weeks: number, months: number) => {
+      if (weeks <= 13) {
+        return `${weeks}w`;
+      } else {
+        return `${months}m`;
+      }
+    };
+
+    return (
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Baby Info Header */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Baby size={24} color={currentTheme.primary} />
+            <View style={styles.headerText}>
+              <Text style={styles.cardTitle}>{babyProfile.name}'s Growth</Text>
+              <Text style={styles.cardDescription}>
+                Born: {formatDate(babyProfile.birthday)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setShowAddModal(true)}
+            >
+              <Plus size={20} color={currentTheme.primaryForeground} />
+            </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.cardContent}>
-          {/* Simple Data Display */}
-          <View style={styles.dataContainer}>
-            {growthData.map((data, index) => (
-              <View key={data.month} style={styles.dataRow}>
-                <View style={styles.monthColumn}>
-                  <Text style={styles.monthText}>{data.month}</Text>
-                </View>
-                <View style={styles.dataColumns}>
-                  <View style={styles.dataItem}>
-                    <Text style={styles.dataLabel}>Weight</Text>
-                    <Text style={styles.dataValue}>{data.weight} lbs</Text>
+        {/* Weight Records Table */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Scale size={20} color={currentTheme.primary} />
+            <View style={styles.headerText}>
+              <Text style={styles.cardTitle}>Weight Records</Text>
+              <Text style={styles.cardDescription}>Tracking in kilograms (kg)</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardContent}>
+            {/* Table Header */}
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderText, { flex: 1.2 }]}>Date</Text>
+              <Text style={[styles.tableHeaderText, { flex: 0.8 }]}>Age</Text>
+              <Text style={[styles.tableHeaderText, { flex: 1 }]}>Weight</Text>
+              <Text style={[styles.tableHeaderText, { flex: 1.5 }]}>Ideal Range</Text>
+            </View>
+
+            {/* Table Rows */}
+            <View style={styles.dataContainer}>
+              {sortedWeight.map((entry, index) => {
+                const age = calculateAge(babyProfile.birthday, entry.date);
+                const idealRange = getIdealWeightRange(age.weeks, age.months, babyProfile.gender);
+                const inRange = isInRange(entry.value, idealRange);
+
+                return (
+                  <View key={`weight-${entry.date}-${index}`} style={styles.tableRow}>
+                    <Text style={[styles.tableCellText, { flex: 1.2 }]}>
+                      {formatDate(entry.date)}
+                    </Text>
+                    <Text style={[styles.tableCellText, { flex: 0.8 }]}>
+                      {formatAge(age.weeks, age.months)}
+                    </Text>
+                    <Text style={[styles.tableCellValue, { flex: 1, color: inRange ? currentTheme.cardForeground : currentTheme.destructive }]}>
+                      {entry.value} kg
+                    </Text>
+                    <Text style={[styles.tableCellRange, { flex: 1.5 }]}>
+                      {idealRange ? `${idealRange.min}-${idealRange.max} kg` : 'N/A'}
+                    </Text>
                   </View>
-                  <View style={styles.dataItem}>
-                    <Text style={styles.dataLabel}>Length</Text>
-                    <Text style={styles.dataValue}>{data.length} in</Text>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* Height Records Table */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ruler size={20} color={currentTheme.primary} />
+            <View style={styles.headerText}>
+              <Text style={styles.cardTitle}>Height Records</Text>
+              <Text style={styles.cardDescription}>Tracking in centimeters (cm)</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardContent}>
+            {/* Table Header */}
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderText, { flex: 1.2 }]}>Date</Text>
+              <Text style={[styles.tableHeaderText, { flex: 0.8 }]}>Age</Text>
+              <Text style={[styles.tableHeaderText, { flex: 1 }]}>Height</Text>
+              <Text style={[styles.tableHeaderText, { flex: 1.5 }]}>Ideal Range</Text>
+            </View>
+
+            {/* Table Rows */}
+            <View style={styles.dataContainer}>
+              {sortedHeight.map((entry, index) => {
+                const age = calculateAge(babyProfile.birthday, entry.date);
+                const idealRange = getIdealHeightRange(age.weeks, age.months, babyProfile.gender);
+                const inRange = isInRange(entry.value, idealRange);
+
+                return (
+                  <View key={`height-${entry.date}-${index}`} style={styles.tableRow}>
+                    <Text style={[styles.tableCellText, { flex: 1.2 }]}>
+                      {formatDate(entry.date)}
+                    </Text>
+                    <Text style={[styles.tableCellText, { flex: 0.8 }]}>
+                      {formatAge(age.weeks, age.months)}
+                    </Text>
+                    <Text style={[styles.tableCellValue, { flex: 1, color: inRange ? currentTheme.cardForeground : currentTheme.destructive }]}>
+                      {entry.value} cm
+                    </Text>
+                    <Text style={[styles.tableCellRange, { flex: 1.5 }]}>
+                      {idealRange ? `${idealRange.min}-${idealRange.max} cm` : 'N/A'}
+                    </Text>
                   </View>
-                </View>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* Growth Summary Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Growth Summary</Text>
+          </View>
+          <View style={styles.cardContent}>
+            <View style={styles.summaryContainer}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Birth Weight</Text>
+                <Text style={styles.summaryValue}>
+                  {firstWeight ? `${firstWeight.value} kg` : '-'}
+                </Text>
               </View>
-            ))}
-          </View>
-        </View>
-      </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Current Weight</Text>
+                <Text style={styles.summaryValue}>
+                  {lastWeight ? `${lastWeight.value} kg` : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Weight Gain</Text>
+                <Text style={[styles.summaryValue, { color: currentTheme.primary }]}>
+                  {weightGain > 0 ? `+${weightGain.toFixed(1)} kg` : '-'}
+                </Text>
+              </View>
+            </View>
 
-      {/* Growth Summary Card */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Growth Summary</Text>
-        </View>
-        <View style={styles.cardContent}>
-          <View style={styles.summaryContainer}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Birth Weight</Text>
-              <Text style={styles.summaryValue}>7.5 lbs</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Current Weight</Text>
-              <Text style={styles.summaryValue}>22 lbs</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Weight Gain</Text>
-              <Text style={[styles.summaryValue, { color: currentTheme.primary }]}>+14.5 lbs</Text>
+            <View style={styles.summaryContainer}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Birth Height</Text>
+                <Text style={styles.summaryValue}>
+                  {firstHeight ? `${firstHeight.value} cm` : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Current Height</Text>
+                <Text style={styles.summaryValue}>
+                  {lastHeight ? `${lastHeight.value} cm` : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Growth</Text>
+                <Text style={[styles.summaryValue, { color: '#10b981' }]}>
+                  {heightGrowth > 0 ? `+${heightGrowth.toFixed(1)} cm` : '-'}
+                </Text>
+              </View>
             </View>
           </View>
+        </View>
+      </ScrollView>
+    );
+  };
 
-          <View style={styles.summaryContainer}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Birth Length</Text>
-              <Text style={styles.summaryValue}>20 in</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Current Length</Text>
-              <Text style={styles.summaryValue}>29.5 in</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Growth</Text>
-              <Text style={[styles.summaryValue, { color: '#10b981' }]}>+9.5 in</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    </ScrollView>
+  return (
+    <>
+      {renderContent()}
+
+      {/* Add Measurement Modal */}
+      <Modal
+        visible={showAddModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowAddModal(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.modalContent}
+            >
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Measurement</Text>
+                <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                  <X size={24} color={currentTheme.foreground} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Form */}
+              <ScrollView
+                style={styles.formContainer}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Weight (kg)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 5.5"
+                    value={weight}
+                    onChangeText={setWeight}
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Height (cm)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 65"
+                    value={height}
+                    onChangeText={setHeight}
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Date (YYYY-MM-DD)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="2025-01-20"
+                    value={measurementDate}
+                    onChangeText={setMeasurementDate}
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                {/* Action Buttons */}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setShowAddModal(false)}
+                    disabled={submitting}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+                    onPress={handleAddMeasurement}
+                    disabled={submitting}
+                  >
+                    <Text style={styles.submitButtonText}>
+                      {submitting ? 'Adding...' : 'Add Measurement'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Create Profile Modal */}
+      <Modal
+        visible={showCreateProfile}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCreateProfile(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowCreateProfile(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.modalContent}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Create Child Profile</Text>
+                <TouchableOpacity onPress={() => setShowCreateProfile(false)}>
+                  <X size={24} color={currentTheme.foreground} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.formContainer}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Name *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., Leo"
+                    value={profileName}
+                    onChangeText={setProfileName}
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Gender *</Text>
+                  <View style={styles.genderContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.genderButton,
+                        profileGender === 'Male' && styles.genderButtonActive,
+                      ]}
+                      onPress={() => setProfileGender('Male')}
+                    >
+                      <Text
+                        style={[
+                          styles.genderButtonText,
+                          profileGender === 'Male' && styles.genderButtonTextActive,
+                        ]}
+                      >
+                        Male
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.genderButton,
+                        profileGender === 'Female' && styles.genderButtonActive,
+                      ]}
+                      onPress={() => setProfileGender('Female')}
+                    >
+                      <Text
+                        style={[
+                          styles.genderButtonText,
+                          profileGender === 'Female' && styles.genderButtonTextActive,
+                        ]}
+                      >
+                        Female
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Birthday (YYYY-MM-DD) *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 2025-09-30"
+                    value={profileBirthday}
+                    onChangeText={setProfileBirthday}
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Birth Weight (kg) *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 3.4"
+                    value={profileBirthWeight}
+                    onChangeText={setProfileBirthWeight}
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Birth Height (cm) *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 50"
+                    value={profileBirthHeight}
+                    onChangeText={setProfileBirthHeight}
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setShowCreateProfile(false)}
+                    disabled={creatingProfile}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.submitButton, creatingProfile && styles.submitButtonDisabled]}
+                    onPress={handleCreateProfile}
+                    disabled={creatingProfile}
+                  >
+                    <Text style={styles.submitButtonText}>
+                      {creatingProfile ? 'Creating...' : 'Create Profile'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
@@ -104,6 +750,68 @@ const createStyles = (theme: any) => StyleSheet.create({
     backgroundColor: theme.background,
     paddingHorizontal: 20,
     paddingVertical: 16,
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: theme.mutedForeground,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.foreground,
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: theme.mutedForeground,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  createProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 8,
+  },
+  createProfileButtonText: {
+    color: theme.primaryForeground,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  genderContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  genderButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.card,
+    alignItems: 'center',
+  },
+  genderButtonActive: {
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
+  },
+  genderButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.cardForeground,
+  },
+  genderButtonTextActive: {
+    color: theme.primaryForeground,
   },
   card: {
     backgroundColor: theme.card,
@@ -142,40 +850,44 @@ const createStyles = (theme: any) => StyleSheet.create({
     flex: 1,
   },
   dataContainer: {
-    gap: 12,
+    gap: 8,
   },
-  dataRow: {
+  tableHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    backgroundColor: theme.muted,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  tableHeaderText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.mutedForeground,
+    textAlign: 'center',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
-  },
-  monthColumn: {
-    width: 60,
-  },
-  monthText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.cardForeground,
-  },
-  dataColumns: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  dataItem: {
     alignItems: 'center',
   },
-  dataLabel: {
+  tableCellText: {
     fontSize: 12,
-    color: theme.mutedForeground,
-    marginBottom: 2,
-  },
-  dataValue: {
-    fontSize: 16,
-    fontWeight: '600',
     color: theme.cardForeground,
+    textAlign: 'center',
+  },
+  tableCellValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  tableCellRange: {
+    fontSize: 11,
+    color: theme.mutedForeground,
+    textAlign: 'center',
   },
   summaryContainer: {
     flexDirection: 'row',
@@ -196,5 +908,92 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: theme.cardForeground,
+  },
+  addButton: {
+    backgroundColor: theme.primary,
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: theme.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: theme.foreground,
+  },
+  formContainer: {
+    padding: 20,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.foreground,
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: theme.card,
+    color: theme.cardForeground,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: theme.muted,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: theme.foreground,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  submitButton: {
+    flex: 1,
+    backgroundColor: theme.primary,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
+  },
+  submitButtonText: {
+    color: theme.primaryForeground,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
