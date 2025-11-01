@@ -52,6 +52,7 @@ export default function BabyGrowthTab() {
 
   // Form state
   const [showAddModal, setShowAddModal] = useState(false);
+  const [measurementType, setMeasurementType] = useState<'weight' | 'height' | 'both'>('both');
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
   const [measurementDate, setMeasurementDate] = useState(new Date().toISOString().split('T')[0]);
@@ -348,12 +349,6 @@ export default function BabyGrowthTab() {
                 Born: {formatDate(babyProfile.birthday)}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setShowAddModal(true)}
-            >
-              <Plus size={20} color={currentTheme.primaryForeground} />
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -363,8 +358,16 @@ export default function BabyGrowthTab() {
             <Scale size={20} color={currentTheme.primary} />
             <View style={styles.headerText}>
               <Text style={styles.cardTitle}>Weight Records</Text>
-              <Text style={styles.cardDescription}>Tracking in kilograms (kg)</Text>
             </View>
+            <TouchableOpacity
+              style={styles.addTextButton}
+              onPress={() => {
+                setMeasurementType('weight');
+                setShowAddModal(true);
+              }}
+            >
+              <Text style={styles.addTextButtonText}>Add Record</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.cardContent}>
@@ -410,8 +413,16 @@ export default function BabyGrowthTab() {
             <Ruler size={20} color={currentTheme.primary} />
             <View style={styles.headerText}>
               <Text style={styles.cardTitle}>Height Records</Text>
-              <Text style={styles.cardDescription}>Tracking in centimeters (cm)</Text>
             </View>
+            <TouchableOpacity
+              style={styles.addTextButton}
+              onPress={() => {
+                setMeasurementType('height');
+                setShowAddModal(true);
+              }}
+            >
+              <Text style={styles.addTextButtonText}>Add Record</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.cardContent}>
@@ -531,7 +542,16 @@ export default function BabyGrowthTab() {
             >
               {/* Modal Header */}
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add Measurement</Text>
+                <View style={styles.modalHeaderContent}>
+                  {measurementType === 'weight' && <Scale size={24} color={currentTheme.primary} />}
+                  {measurementType === 'height' && <Ruler size={24} color={currentTheme.primary} />}
+                  {measurementType === 'both' && <Baby size={24} color={currentTheme.primary} />}
+                  <Text style={styles.modalTitle}>
+                    {measurementType === 'weight' ? 'Add Weight' :
+                      measurementType === 'height' ? 'Add Height' :
+                        'Add Measurement'}
+                  </Text>
+                </View>
                 <TouchableOpacity onPress={() => setShowAddModal(false)}>
                   <X size={24} color={currentTheme.foreground} />
                 </TouchableOpacity>
@@ -543,29 +563,39 @@ export default function BabyGrowthTab() {
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
               >
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Weight (kg)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g., 5.5"
-                    value={weight}
-                    onChangeText={setWeight}
-                    keyboardType="decimal-pad"
-                    placeholderTextColor={currentTheme.mutedForeground}
-                  />
-                </View>
+                {(measurementType === 'weight' || measurementType === 'both') && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Weight (kg) {measurementType === 'both' ? '' : '*'}</Text>
+                    <View style={styles.inputWithIcon}>
+                      <Scale size={20} color={currentTheme.mutedForeground} />
+                      <TextInput
+                        style={styles.inputWithIconField}
+                        placeholder="e.g., 5.5"
+                        value={weight}
+                        onChangeText={setWeight}
+                        keyboardType="decimal-pad"
+                        placeholderTextColor={currentTheme.mutedForeground}
+                      />
+                    </View>
+                  </View>
+                )}
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Height (cm)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g., 65"
-                    value={height}
-                    onChangeText={setHeight}
-                    keyboardType="decimal-pad"
-                    placeholderTextColor={currentTheme.mutedForeground}
-                  />
-                </View>
+                {(measurementType === 'height' || measurementType === 'both') && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Height (cm) {measurementType === 'both' ? '' : '*'}</Text>
+                    <View style={styles.inputWithIcon}>
+                      <Ruler size={20} color={currentTheme.mutedForeground} />
+                      <TextInput
+                        style={styles.inputWithIconField}
+                        placeholder="e.g., 65"
+                        value={height}
+                        onChangeText={setHeight}
+                        keyboardType="decimal-pad"
+                        placeholderTextColor={currentTheme.mutedForeground}
+                      />
+                    </View>
+                  </View>
+                )}
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Date</Text>
@@ -621,8 +651,13 @@ export default function BabyGrowthTab() {
                     onPress={handleAddMeasurement}
                     disabled={submitting}
                   >
+                    {measurementType === 'weight' && <Scale size={20} color={currentTheme.primaryForeground} />}
+                    {measurementType === 'height' && <Ruler size={20} color={currentTheme.primaryForeground} />}
                     <Text style={styles.submitButtonText}>
-                      {submitting ? 'Adding...' : 'Add Measurement'}
+                      {submitting ? 'Adding...' :
+                        measurementType === 'weight' ? 'Add Weight' :
+                          measurementType === 'height' ? 'Add Height' :
+                            'Add Measurement'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -669,7 +704,7 @@ export default function BabyGrowthTab() {
                   <Text style={styles.inputLabel}>Name *</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g., Leo"
+                    placeholder="Enter your child name"
                     value={profileName}
                     onChangeText={setProfileName}
                     placeholderTextColor={currentTheme.mutedForeground}
@@ -692,7 +727,7 @@ export default function BabyGrowthTab() {
                           profileGender === 'Male' && styles.genderButtonTextActive,
                         ]}
                       >
-                        Male
+                        Boy
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -708,7 +743,7 @@ export default function BabyGrowthTab() {
                           profileGender === 'Female' && styles.genderButtonTextActive,
                         ]}
                       >
-                        Female
+                        Girl
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -980,6 +1015,15 @@ const createStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  addTextButton: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  addTextButtonText: {
+    color: theme.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -999,6 +1043,11 @@ const createStyles = (theme: any) => StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
+  },
+  modalHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   modalTitle: {
     fontSize: 20,
@@ -1027,6 +1076,22 @@ const createStyles = (theme: any) => StyleSheet.create({
     backgroundColor: theme.card,
     color: theme.cardForeground,
   },
+  inputWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: theme.card,
+  },
+  inputWithIconField: {
+    flex: 1,
+    fontSize: 16,
+    color: theme.cardForeground,
+  },
   modalActions: {
     flexDirection: 'row',
     gap: 12,
@@ -1046,10 +1111,13 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   submitButton: {
     flex: 1,
+    flexDirection: 'row',
+    gap: 8,
     backgroundColor: theme.primary,
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   submitButtonDisabled: {
     opacity: 0.5,
