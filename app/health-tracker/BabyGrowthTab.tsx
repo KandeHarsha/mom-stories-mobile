@@ -1,7 +1,7 @@
 import themes from '@/constants/colors';
 import { WHO_LENGTH_CM_RANGES, WHO_WEIGHT_KG_RANGES } from '@/constants/growthData';
 import { useAuth } from '@/context/AuthContext';
-import { Baby, Plus, Ruler, Scale, X } from 'lucide-react-native';
+import { Baby, CalendarIcon, Plus, Ruler, Scale, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import {
@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Calendar } from 'react-native-calendars';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -54,6 +55,7 @@ export default function BabyGrowthTab() {
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
   const [measurementDate, setMeasurementDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showMeasurementCalendar, setShowMeasurementCalendar] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Create profile state
@@ -61,6 +63,7 @@ export default function BabyGrowthTab() {
   const [profileName, setProfileName] = useState('');
   const [profileGender, setProfileGender] = useState('Male');
   const [profileBirthday, setProfileBirthday] = useState('');
+  const [showBirthdayCalendar, setShowBirthdayCalendar] = useState(false);
   const [profileBirthWeight, setProfileBirthWeight] = useState('');
   const [profileBirthHeight, setProfileBirthHeight] = useState('');
   const [creatingProfile, setCreatingProfile] = useState(false);
@@ -565,14 +568,43 @@ export default function BabyGrowthTab() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Date (YYYY-MM-DD)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="2025-01-20"
-                    value={measurementDate}
-                    onChangeText={setMeasurementDate}
-                    placeholderTextColor={currentTheme.mutedForeground}
-                  />
+                  <Text style={styles.inputLabel}>Date</Text>
+                  <TouchableOpacity
+                    style={styles.dateButton}
+                    onPress={() => setShowMeasurementCalendar(!showMeasurementCalendar)}
+                  >
+                    <CalendarIcon size={20} color={currentTheme.mutedForeground} />
+                    <Text style={styles.dateButtonText}>
+                      {new Date(measurementDate).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </Text>
+                  </TouchableOpacity>
+                  {showMeasurementCalendar && (
+                    <Calendar
+                      current={measurementDate}
+                      onDayPress={(day) => {
+                        setMeasurementDate(day.dateString);
+                        setShowMeasurementCalendar(false);
+                      }}
+                      maxDate={new Date().toISOString().split('T')[0]}
+                      theme={{
+                        backgroundColor: currentTheme.card,
+                        calendarBackground: currentTheme.card,
+                        textSectionTitleColor: currentTheme.mutedForeground,
+                        selectedDayBackgroundColor: currentTheme.primary,
+                        selectedDayTextColor: currentTheme.primaryForeground,
+                        todayTextColor: currentTheme.primary,
+                        dayTextColor: currentTheme.cardForeground,
+                        textDisabledColor: currentTheme.mutedForeground,
+                        monthTextColor: currentTheme.cardForeground,
+                        arrowColor: currentTheme.primary,
+                      }}
+                      style={styles.calendar}
+                    />
+                  )}
                 </View>
 
                 {/* Action Buttons */}
@@ -683,14 +715,45 @@ export default function BabyGrowthTab() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Birthday (YYYY-MM-DD) *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g., 2025-09-30"
-                    value={profileBirthday}
-                    onChangeText={setProfileBirthday}
-                    placeholderTextColor={currentTheme.mutedForeground}
-                  />
+                  <Text style={styles.inputLabel}>Birthday *</Text>
+                  <TouchableOpacity
+                    style={styles.dateButton}
+                    onPress={() => setShowBirthdayCalendar(!showBirthdayCalendar)}
+                  >
+                    <CalendarIcon size={20} color={currentTheme.mutedForeground} />
+                    <Text style={styles.dateButtonText}>
+                      {profileBirthday
+                        ? new Date(profileBirthday).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })
+                        : 'Select birthday'}
+                    </Text>
+                  </TouchableOpacity>
+                  {showBirthdayCalendar && (
+                    <Calendar
+                      current={profileBirthday || new Date().toISOString().split('T')[0]}
+                      onDayPress={(day) => {
+                        setProfileBirthday(day.dateString);
+                        setShowBirthdayCalendar(false);
+                      }}
+                      maxDate={new Date().toISOString().split('T')[0]}
+                      theme={{
+                        backgroundColor: currentTheme.card,
+                        calendarBackground: currentTheme.card,
+                        textSectionTitleColor: currentTheme.mutedForeground,
+                        selectedDayBackgroundColor: currentTheme.primary,
+                        selectedDayTextColor: currentTheme.primaryForeground,
+                        todayTextColor: currentTheme.primary,
+                        dayTextColor: currentTheme.cardForeground,
+                        textDisabledColor: currentTheme.mutedForeground,
+                        monthTextColor: currentTheme.cardForeground,
+                        arrowColor: currentTheme.primary,
+                      }}
+                      style={styles.calendar}
+                    />
+                  )}
                 </View>
 
                 <View style={styles.inputGroup}>
@@ -995,5 +1058,26 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.primaryForeground,
     fontSize: 16,
     fontWeight: '600',
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: theme.card,
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: theme.cardForeground,
+  },
+  calendar: {
+    marginTop: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
 });
