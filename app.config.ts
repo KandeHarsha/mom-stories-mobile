@@ -27,15 +27,27 @@ const getAppName = () => {
   return 'Mom Stories';
 };
 
+const getScheme = () => {
+  if (IS_DEV) {
+    return 'momstoriesmobile-dev';
+  }
 
-export default({config}: ConfigContext):ExpoConfig => ({
+  if (IS_PREVIEW) {
+    return 'momstoriesmobile-preview';
+  }
+
+  return 'momstoriesmobile';
+};
+
+
+export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   "name": getAppName(),
   "slug": "mom-stories-mobile",
   "version": "1.0.0",
   "orientation": "portrait",
   "icon": "./assets/images/icon.png",
-  "scheme": "momstoriesmobile",
+  "scheme": getScheme(),
   "userInterfaceStyle": "automatic",
   "newArchEnabled": true,
   "jsEngine": "hermes",
