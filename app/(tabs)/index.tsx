@@ -1,9 +1,8 @@
-import { Text, View } from "react-native";
+import React from 'react'
+import HomeScreen from '../home'
 
-export default function Index() {
-  return (
-    <View className="flex-1 justify-center items-center bg-background">
-      <Text className="text-bold text-primary text-3xl">Hello Mom!!</Text>
-    </View>
-  );
+const Home = () => {
+  return <HomeScreen />
 }
+
+export default Home
