@@ -4,15 +4,15 @@ import { Bookmark, Send } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useRef, useState } from 'react'
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import SavedResponses from './SavedResponses'
@@ -36,7 +36,11 @@ interface Memory {
   isAiResponse: boolean
 }
 
-const AiSupportScreen = () => {
+interface AiSupportScreenProps {
+  initialQuestion?: string
+}
+
+const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
   const { session } = useAuth();
   const token = session?.accessToken;
   const { colorScheme } = useColorScheme()
@@ -51,6 +55,7 @@ const AiSupportScreen = () => {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [view, setView] = useState<'chat' | 'saved'>('chat')
+  const [hasProcessedQuestion, setHasProcessedQuestion] = useState(false)
 
   const scrollViewRef = useRef<ScrollView>(null)
 
@@ -161,6 +166,64 @@ const AiSupportScreen = () => {
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true })
   }, [messages])
+
+  // Handle incoming question from dashboard
+  useEffect(() => {
+    if (initialQuestion && !hasProcessedQuestion && token) {
+      setHasProcessedQuestion(true)
+      setInput(initialQuestion)
+      
+      // Automatically send the question
+      const sendInitialQuestion = async () => {
+        const userMessage: Message = {
+          id: Date.now(),
+          text: initialQuestion,
+          sender: 'user'
+        }
+
+        setMessages(prev => [...prev, userMessage])
+        setInput('')
+        setIsLoading(true)
+
+        try {
+          const url = `${API_BASE_URL}/ai-support`
+          const headers = getAuthHeaders()
+          const body = JSON.stringify({
+            question: userMessage.text
+          })
+
+          const response = await fetch(url, {
+            method: 'POST',
+            headers,
+            body
+          })
+
+          if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`API Error: ${response.status} - ${errorText}`)
+          }
+
+          const data = await response.json()
+
+          const aiMessage: Message = {
+            id: Date.now() + 1,
+            text: data.response || data.message || data.answer || 'Sorry, I couldn\'t process your request.',
+            sender: 'ai',
+            questionForAi: userMessage.text
+          }
+
+          setMessages(prev => [...prev, aiMessage])
+        } catch (error) {
+          console.error('Error sending message:', error)
+          Alert.alert('Error', `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        } finally {
+          setIsLoading(false)
+        }
+      }
+
+      sendInitialQuestion()
+    }
+  }, [initialQuestion, hasProcessedQuestion, token])
 
   if (view === 'saved') {
     return <SavedResponses onBack={() => setView('chat')} />
