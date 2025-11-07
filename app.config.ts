@@ -68,7 +68,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     "edgeToEdgeEnabled": true,
     "predictiveBackGestureEnabled": false,
-    "package": getUniqueIdentifier()
+    "package": getUniqueIdentifier(),
+    "googleServicesFile": "./google-services.json"
   },
   "web": {
     "output": "static",
@@ -97,7 +98,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         }
       }
     ],
-    "expo-web-browser"
+    "expo-web-browser",
+    "expo-notifications"
   ],
   "experiments": {
     "typedRoutes": true,

@@ -1,9 +1,21 @@
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { NotificationProvider } from "@/context/NotificationContext";
+import * as Notifications from "expo-notifications";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useColorScheme } from "nativewind";
 import React, { useEffect } from "react";
 import themes from "../constants/colors";
 import "./global.css";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 function RootLayoutNav() {
   const { colorScheme } = useColorScheme();
@@ -48,7 +60,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <AuthProvider>
+      <NotificationProvider>
       <RootLayoutNav />
+      </NotificationProvider>
     </AuthProvider>
   );
 }
