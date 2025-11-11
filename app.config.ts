@@ -69,7 +69,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "edgeToEdgeEnabled": true,
     "predictiveBackGestureEnabled": false,
     "package": getUniqueIdentifier(),
-    "googleServicesFile": "./google-services.json"
+    "googleServicesFile": "./google-services.json",
+    "permissions": [
+      "POST_NOTIFICATIONS"
+    ]
   },
   "web": {
     "output": "static",
@@ -99,7 +102,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       }
     ],
     "expo-web-browser",
-    "expo-notifications"
+    [
+      "expo-notifications",
+      {
+        "icon": "./assets/images/icon.png",
+        "color": "#ffffff",
+        "sounds": ["./assets/notification-sound.wav"],
+        "mode": "production"
+      }
+    ]
   ],
   "experiments": {
     "typedRoutes": true,

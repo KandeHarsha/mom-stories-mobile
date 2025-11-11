@@ -46,9 +46,20 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
 
   useEffect(() => {
     registerForPushNotificationsAsync().then(
-      (token) => setExpoPushToken(token ?? null),
-      (error) => setError(error)
+      (token) => {
+        console.log("✅ Push token registered:", token);
+        setExpoPushToken(token ?? null);
+      },
+      (error) => {
+        console.error("❌ Push token registration failed:", error);
+        setError(error);
+      }
     );
+
+    // Check current permission status
+    Notifications.getPermissionsAsync().then((status) => {
+      console.log("📱 Notification permissions:", status);
+    });
 
     notificationListener.current =
       Notifications.addNotificationReceivedListener((notification) => {
