@@ -1,6 +1,7 @@
 import themes from '@/constants/colors';
 import { WHO_LENGTH_CM_RANGES, WHO_WEIGHT_KG_RANGES } from '@/constants/growthData';
 import { useAuth } from '@/context/AuthContext';
+import { useNotification } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
 import { Baby, BookHeart, Calendar, CalendarIcon, Heart, Plus, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
@@ -48,6 +49,7 @@ export default function Home() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
   const { session, user } = useAuth();
+  const {notification, expoPushToken, error } = useNotification();
   const router = useRouter();
   const [babyProfile, setBabyProfile] = useState<BabyProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +74,10 @@ export default function Home() {
   const [creatingProfile, setCreatingProfile] = useState(false);
 
   const styles = createStyles(currentTheme);
+
+  console.log("PushNotification Token: ", expoPushToken);
+  console.log("Notification: ", JSON.stringify(notification?.request.content.data, null, 2));
+  console.log("Notification Title: ", notification?.request.content.title)
 
   useEffect(() => {
     const fetchBabyProfile = async () => {
