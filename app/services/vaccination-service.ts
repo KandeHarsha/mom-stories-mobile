@@ -17,7 +17,7 @@ export const mockVaccinations: MergedVaccination[] = [
     dose: '1st dose',
     description: 'Protects against hepatitis B virus infection, which can cause liver disease.',
     status: 1,
-    imageUrl: null,
+    imageUrl: undefined,
   },
   {
     id: '2',

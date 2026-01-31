@@ -5,15 +5,17 @@ import React, { useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BabyGrowthTab from './BabyGrowthTab';
+import DoctorCheckupTab from './DoctorCheckupTab';
 import MomWellnessTab from './MomWellnessTab';
 import VaccinationTabNew from './VaccinationTabNew';
 
-type TabType = 'growth' | 'vaccinations' | 'wellness';
+type TabType = 'growth' | 'vaccinations' | 'wellness' | 'checkup';
 
 const tabs = [
   { id: 'growth' as TabType, label: 'Baby Growth', icon: Baby },
   { id: 'vaccinations' as TabType, label: 'Vaccinations', icon: Baby },
   { id: 'wellness' as TabType, label: 'Mom Wellness', icon: Baby },
+  { id: 'checkup' as TabType, label: 'Doctor Checkup', icon: Baby },
 ];
 
 export default function HealthTrackerView() {
@@ -31,6 +33,8 @@ export default function HealthTrackerView() {
         return <VaccinationTabNew />;
       case 'wellness':
         return <MomWellnessTab />;
+      case 'checkup':
+        return <DoctorCheckupTab />;
       default:
         return <BabyGrowthTab />;
     }
