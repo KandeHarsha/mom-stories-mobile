@@ -3,11 +3,11 @@ import { Redirect, useRouter } from "expo-router";
 import { useColorScheme } from "nativewind";
 import React from "react";
 import {
-  ActivityIndicator,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import themes from "../../constants/colors";
@@ -18,11 +18,11 @@ export default function Login() {
   const { top } = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme as keyof typeof themes] ?? themes.light;
-  // const { loginWithResponse } = useAuth(); 
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       alert("Please enter both email and password");
@@ -32,6 +32,7 @@ export default function Login() {
   }
 
   if (session) return <Redirect href={'../(tabs)'} />
+  
   return (
     <View
       className="flex-1"

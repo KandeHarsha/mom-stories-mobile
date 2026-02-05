@@ -1,6 +1,7 @@
 import themes from '@/constants/colors';
 import { WHO_LENGTH_CM_RANGES, WHO_WEIGHT_KG_RANGES } from '@/constants/growthData';
 import { useAuth } from '@/context/AuthContext';
+import { useNotification } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
 import { Baby, BookHeart, Calendar, CalendarIcon, Heart, Plus, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
@@ -47,7 +48,8 @@ interface BabyProfile {
 export default function Home() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
-  const { session, user } = useAuth();
+  const { session, user, selectedChildId, setSelectedChildId, refreshUser } = useAuth();
+  const {notification, expoPushToken, error } = useNotification();
   const router = useRouter();
   const [babyProfile, setBabyProfile] = useState<BabyProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,13 +77,15 @@ export default function Home() {
 
   useEffect(() => {
     const fetchBabyProfile = async () => {
-      if (!session?.accessToken || !user?.childId) {
+      
+      
+      if (!session?.accessToken || !selectedChildId) {
         setLoading(false);
         return;
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/children/${user.childId}`, {
+        const response = await fetch(`${API_BASE_URL}/children/${selectedChildId}`, {
           headers: {
             'Authorization': `Bearer ${session.accessToken}`,
           },
@@ -99,7 +103,7 @@ export default function Home() {
     };
 
     fetchBabyProfile();
-  }, [session, user]);
+  }, [session, selectedChildId]);
 
   const handleCreateProfile = async () => {
     if (!profileName || !profileBirthday || !profileBirthWeight || !profileBirthHeight) {
@@ -151,23 +155,16 @@ export default function Home() {
       setProfileBirthWeight('');
       setProfileBirthHeight('');
 
-      // Show success message and reload to refresh user data
-      Alert.alert(
-        'Success', 
-        data.message || 'Child profile created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Navigate away and back to force a refresh of user data
-              router.replace('/(tabs)/healthTracker');
-              setTimeout(() => {
-                router.replace('/(tabs)');
-              }, 100);
-            }
-          }
-        ]
-      );
+      // Refresh user data to get updated childrenIds
+      await refreshUser();
+      
+      // Set the newly created child as selected
+      if (createdProfile?.id) {
+        setSelectedChildId(createdProfile.id);
+      }
+
+      // Show success message
+      Alert.alert('Success', data.message || 'Child profile created successfully!');
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create profile');
     } finally {
@@ -186,7 +183,7 @@ export default function Home() {
       return;
     }
 
-    const childId = user?.childId || babyProfile?.id;
+    const childId = selectedChildId || babyProfile?.id;
     if (!childId) {
       Alert.alert('Error', 'No child profile found');
       return;

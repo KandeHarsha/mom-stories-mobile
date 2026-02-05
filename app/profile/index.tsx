@@ -1,25 +1,29 @@
 import themes from '@/constants/colors'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'expo-router'
-import { ChevronRight, HelpCircle, LogIn, LogOut, Settings, Shield, User } from 'lucide-react-native'
+import { Baby, ChevronRight, HelpCircle, LogIn, LogOut, Settings, Shield, User } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
 const ProfileScreen = () => {
-  const { user, logout, session } = useAuth()
+  const { user, logout, session, selectedChildId, setSelectedChildId, refreshUser } = useAuth()
   const { colorScheme } = useColorScheme()
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [children, setChildren] = useState<any[]>([])
+  const [loadingChildren, setLoadingChildren] = useState(false)
   const router = useRouter()
 
   const handleLogout = () => {
@@ -50,7 +54,48 @@ const ProfileScreen = () => {
     router.replace('/(auth)/login')
   }
 
+  // Fetch children data
+  useEffect(() => {
+    const fetchChildren = async () => {
+      if (!session?.accessToken || !user?.childrenIds || user.childrenIds.length === 0) {
+        return;
+      }
+
+      setLoadingChildren(true);
+      try {
+        const childrenData = await Promise.all(
+          user.childrenIds.map(async (childId: string) => {
+            const response = await fetch(`${API_BASE_URL}/children/${childId}`, {
+              headers: {
+                'Authorization': `Bearer ${session.accessToken}`,
+              },
+            });
+            if (response.ok) {
+              const data = await response.json();
+              return data.profile || data;
+            }
+            return null;
+          })
+        );
+        setChildren(childrenData.filter(Boolean));
+      } catch (error) {
+        console.error('Failed to fetch children:', error);
+      } finally {
+        setLoadingChildren(false);
+      }
+    };
+
+    fetchChildren();
+  }, [session, user]);
+
   const menuItems = [
+    ...(session && user?.emailVerified === false ? [{
+      id: 'verify-email',
+      title: 'Verify Email',
+      subtitle: 'Verify your email address to secure your account',
+      icon: Shield,
+      onPress: () => Alert.alert('Email Verification', 'Email verification feature will be available soon')
+    }] : []),
     {
       id: 'account',
       title: 'Account Settings',
@@ -88,43 +133,109 @@ const ProfileScreen = () => {
         {/* User Info Card */}
         <View style={styles.userCard}>
           <View style={styles.userAvatar}>
-            {(user?.ThumbnailImageUrl || user?.ImageUrl) ? (
-              <Image 
-                source={{ uri: user.ThumbnailImageUrl || user.ImageUrl || '' }} 
-                style={styles.avatarImage}
-                onError={() => {
-                  // Handle image load error by showing default avatar
-                }}
-              />
-            ) : (
-              <User size={32} color={currentTheme.primary} />
-            )}
+            <User size={32} color={currentTheme.primary} />
           </View>
           <View style={styles.userInfo}>
             <Text style={styles.userName}>
               {session 
-                ? (user?.FullName || user?.FirstName || 'Welcome User')
+                ? (user?.name || 'Welcome User')
                 : 'Not Logged In'
               }
             </Text>
             <Text style={styles.userEmail}>
               {session 
-                ? (user?.Email?.[0]?.Value || 'No email available')
+                ? (user?.email || 'No email available')
                 : 'Please login to view your profile'
               }
             </Text>
-            {session && user?.Company && (
-              <Text style={styles.userCompany}>
-                {user.Company}
-              </Text>
+            {session && user?.phase && (
+              <View style={styles.phaseContainer}>
+                <Text style={styles.phaseLabel}>Phase:</Text>
+                <Text style={styles.phaseValue}>
+                  {user.phase === 'preparation' ? 'Preparing for Motherhood' :
+                   user.phase === 'pregnancy' ? 'Pregnancy Journey' :
+                   user.phase === 'post_delivery' ? 'Post Delivery Care' :
+                   user.phase}
+                </Text>
+              </View>
             )}
-            {session && (user?.LocalCity || user?.LocalCountry) && (
-              <Text style={styles.userLocation}>
-                {[user.LocalCity, user.LocalCountry].filter(Boolean).join(', ')}
+            {session && user?.emailVerified !== undefined && (
+              <View style={styles.verificationContainer}>
+                <Text style={[
+                  styles.verificationText,
+                  { color: user.emailVerified ? currentTheme.primary : currentTheme.destructive }
+                ]}>
+                  {user.emailVerified ? '✓ Email Verified' : '⚠ Email Not Verified'}
+                </Text>
+              </View>
+            )}
+            {session && user?.createdAt && (
+              <Text style={styles.memberSince}>
+                Member since {new Date(user.createdAt).toLocaleDateString('en-US', {
+                  month: 'long',
+                  year: 'numeric'
+                })}
               </Text>
             )}
           </View>
         </View>
+
+        {/* Children Section */}
+        {session && user?.childrenIds && user.childrenIds.length > 0 && (
+          <View style={styles.menuSection}>
+            <Text style={styles.sectionTitle}>My Children</Text>
+            {loadingChildren ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={currentTheme.primary} />
+              </View>
+            ) : (
+              children.map((child) => (
+                <TouchableOpacity
+                  key={child.id}
+                  style={[
+                    styles.childItem,
+                    selectedChildId === child.id && styles.childItemSelected
+                  ]}
+                  onPress={() => {
+                    setSelectedChildId(child.id);
+                    Alert.alert('Child Selected', `Now viewing ${child.name}'s data`);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    styles.childItemIcon,
+                    selectedChildId === child.id && styles.childItemIconSelected
+                  ]}>
+                    <Baby size={20} color={selectedChildId === child.id ? currentTheme.primary : currentTheme.primary} />
+                  </View>
+                  <View style={styles.childItemContent}>
+                    <Text style={[
+                      styles.childItemTitle,
+                      selectedChildId === child.id && styles.childItemTitleSelected
+                    ]}>
+                      {child.name}
+                    </Text>
+                    <Text style={[
+                      styles.childItemSubtitle,
+                      selectedChildId === child.id && styles.childItemSubtitleSelected
+                    ]}>
+                      {child.gender} • Born {new Date(child.birthday).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </Text>
+                  </View>
+                  {selectedChildId === child.id && (
+                    <View style={styles.selectedBadge}>
+                      <Text style={styles.selectedBadgeText}>Active</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        )}
 
         {/* Menu Items */}
         <View style={styles.menuSection}>
@@ -256,17 +367,34 @@ const createStyles = (theme: any) => StyleSheet.create({
   userEmail: {
     fontSize: 14,
     color: theme.mutedForeground,
-    marginBottom: 2,
+    marginBottom: 8,
   },
-  userCompany: {
+  phaseContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  phaseLabel: {
+    fontSize: 13,
+    color: theme.mutedForeground,
+    marginRight: 6,
+  },
+  phaseValue: {
     fontSize: 13,
     color: theme.primary,
     fontWeight: '500',
-    marginBottom: 2,
   },
-  userLocation: {
+  verificationContainer: {
+    marginBottom: 4,
+  },
+  verificationText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  memberSince: {
     fontSize: 12,
     color: theme.mutedForeground,
+    fontStyle: 'italic',
   },
   menuSection: {
     marginBottom: 24,
@@ -356,5 +484,74 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 12,
     color: theme.mutedForeground,
     marginBottom: 2,
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  childItem: {
+    backgroundColor: theme.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: theme.foreground,
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  childItemSelected: {
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
+  },
+  childItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.muted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  childItemIconSelected: {
+    backgroundColor: theme.primaryForeground,
+  },
+  childItemContent: {
+    flex: 1,
+  },
+  childItemTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.cardForeground,
+    marginBottom: 2,
+  },
+  childItemTitleSelected: {
+    color: theme.primaryForeground,
+  },
+  childItemSubtitle: {
+    fontSize: 14,
+    color: theme.mutedForeground,
+  },
+  childItemSubtitleSelected: {
+    color: theme.primaryForeground,
+    opacity: 0.9,
+  },
+  selectedBadge: {
+    backgroundColor: theme.primaryForeground,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  selectedBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.primary,
   },
 })

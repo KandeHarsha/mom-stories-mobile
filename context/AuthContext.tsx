@@ -13,15 +13,23 @@ interface SessionState {
 interface AuthContextType {
   session: SessionState | null;
   signin: (email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string, phase: string) => Promise<{ success: boolean; autoLogin: boolean }>;
   logout: () => Promise<void>;
   user: any;
+  selectedChildId: string | null;
+  setSelectedChildId: (childId: string | null) => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   session: null,
   signin: async () => { },
+  signup: async () => ({ success: false, autoLogin: false }),
   logout: async () => { },
-  user: null
+  user: null,
+  selectedChildId: null,
+  setSelectedChildId: () => {},
+  refreshUser: async () => {},
 });
 
 interface AuthProviderProps {
@@ -29,57 +37,130 @@ interface AuthProviderProps {
 }
 
 const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<SessionState | null>(null);
-  const [user, setUser] = useState<any | null>(null)
-  const [accessToken, setAccessToken] = useState("")
+  const [user, setUser] = useState<any | null>(null);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
 
   useEffect(() => {
-    const getToken = async () => {
+    const initializeAuth = async () => {
       try {
         const token = await fetchAccessToken();
-        setAccessToken(token || "");
+        
+        if (token) {
+          // Try to fetch user data
+          try {
+            const response = await fetch(
+              `${process.env.EXPO_PUBLIC_API_URL}/user`,
+              {
+                method: "GET",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${token}`
+                },
+              }
+            );
+            
+            if (response.ok) {
+              const responseData = await response.json();
+              
+              // Handle nested user object structure
+              const userData = responseData.user || responseData;
+              setUser(userData || null);
+              setSession({ accessToken: token });
+              
+              // Auto-select first child if childrenIds array exists
+              if (userData?.childrenIds && userData.childrenIds.length > 0) {
+                setSelectedChildId(userData.childrenIds[0]);
+              } else if (userData?.childId) {
+                // Fallback to old childId field for backward compatibility
+                setSelectedChildId(userData.childId);
+              } else {
+              }
+            }
+          } catch (error) {
+            console.error('AuthContext: Error fetching user:', error);
+          }
+        }
       } catch (error) {
-        console.error("Failed to fetch access token:", error);
+        console.error("AuthContext: Failed to initialize auth:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    getToken();
+    initializeAuth();
   }, []);
 
-  useEffect(() => {
-    checkAuth()
-  }, [accessToken])
+  const refreshUser = async () => {
+    if (!session?.accessToken) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_API_URL}/user`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.accessToken}`
+          },
+        }
+      );
+      
+      if (response.ok) {
+        const responseData = await response.json();
+        
+        // Handle nested user object structure
+        const userData = responseData.user || responseData;
+        setUser(userData || null);
+        
+        // Auto-select first child if childrenIds array exists and no child is selected
+        if (!selectedChildId && userData?.childrenIds && userData.childrenIds.length > 0) {
+          setSelectedChildId(userData.childrenIds[0]);
+        }
+      }
+    } catch (error) {
+      console.error('RefreshUser: Error fetching user:', error);
+    }
+  };
 
   const signin = async (email: string, password: string) => {
     setLoading(true)
-    try {
+    try {      
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/auth/emailLogin`,
+        `${process.env.EXPO_PUBLIC_API_URL}/auth/sign-in/email`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Origin": `${process.env.EXPO_PUBLIC_API_URL}`
           },
           body: JSON.stringify({ email, password }),
         }
-      );
+      );      
       if (response.ok) {
         const responseData = await response.json();
 
         setSession({
-          accessToken: responseData.data.access_token || "",
-          refreshToken: responseData.data.refresh_token || "",
-          tokenExpiry: responseData.data.expires_in || "",
+          accessToken: responseData.token || "",
         })
 
-        await SecureStore.setItemAsync('accessToken', responseData.data.access_token);
-        await SecureStore.setItemAsync('refreshToken', responseData.data.refresh_token);
-        await SecureStore.setItemAsync('tokenExpiry', responseData.data.expires_in);
+        await SecureStore.setItemAsync('accessToken', responseData.token);
 
-        setUser(responseData.data.Profile || null)
+        // Handle nested user object structure
+        const userData = responseData.user || responseData;
+        setUser(userData || null);
+        
+        // Auto-select first child if childrenIds array exists
+        
+        if (userData?.childrenIds && userData.childrenIds.length > 0) {
+          setSelectedChildId(userData.childrenIds[0]);
+        } else if (userData?.childId) {
+          // Fallback to old childId field for backward compatibility
+          setSelectedChildId(userData.childId);
+        }
 
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -92,56 +173,105 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const logout = async () => {
-    // TODO: Implement logout logic
-    setLoading(true)
-    setSession(null)
-    setUser(null)
-    await SecureStore.deleteItemAsync('accessToken');
-    await SecureStore.deleteItemAsync('refreshToken');
-    await SecureStore.deleteItemAsync('tokenExpiry');
-    setLoading(false)
-  };
-
-  const fetchUser = async () => {
-    setLoading(true)
+  const signup = async (name: string, email: string, password: string, phase: string): Promise<{ success: boolean; autoLogin: boolean }> => {
     try {
+      
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/user`,
+        `${process.env.EXPO_PUBLIC_API_URL}/auth/sign-up/email`,
         {
-          method: "GET",
+          method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${accessToken}`
+            "Origin": `${process.env.EXPO_PUBLIC_API_URL}`
           },
+          body: JSON.stringify({ name, email, password, phase }),
         }
       );
-      if (response.ok) {
-        const responseData = await response.json();
-        setUser(responseData || null)
-        setSession({ accessToken: accessToken as string })
-
+      
+      
+      const responseData = await response.json();
+      
+      if (response.ok && responseData.token) {
+        // Check if we have both user and token for auto-login
+        if (responseData.user && responseData.token) {
+          
+          // Handle nested user object structure
+          const userData = responseData.user.user || responseData.user;
+          
+          // Set session and user data
+          setSession({ accessToken: responseData.token });
+          setUser(userData);
+          
+          // Store token in secure storage
+          await SecureStore.setItemAsync('accessToken', responseData.token);
+          
+          // Auto-select first child if childrenIds array exists
+          if (userData?.childrenIds && userData.childrenIds.length > 0) {
+            setSelectedChildId(userData.childrenIds[0]);
+          } else if (userData?.childId) {
+            // Fallback to old childId field for backward compatibility
+            setSelectedChildId(userData.childId);
+          }
+          
+          return { success: true, autoLogin: true };
+        } else {
+          return { success: true, autoLogin: false };
+        }
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        alert(errorData.error || errorData.message || 'Failed to fetch user data.');
+        return { success: false, autoLogin: false };
       }
     } catch (error) {
-      alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
+      console.error('Signup: Network error:', error);
+      return { success: false, autoLogin: false };
     }
-  }
+  };
 
-  const checkAuth = async () => {
-    if (!accessToken) return
-    fetchUser()
-  }
+  const logout = async () => {
+    try {
+      setLoading(true)
+      
+      // Get the current access token before clearing it
+      const currentToken = session?.accessToken;
+      
+      
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_API_URL}/auth/sign-out`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Origin": `${process.env.EXPO_PUBLIC_API_URL}`,
+            ...(currentToken && { "Authorization": `Bearer ${currentToken}` })
+          },
+          body: JSON.stringify({ token: currentToken || "" }),
+        }
+      );      
+      if (response.ok) {
+      } else {
+      }
+    } catch (error) {
+      console.error('Logout: Network error during server logout:', error)
+    } finally {
+      // Always clear local session and storage regardless of server response
+      setSession(null)
+      setUser(null)
+      setSelectedChildId(null)
+      await SecureStore.deleteItemAsync('accessToken');
+      await SecureStore.deleteItemAsync('refreshToken');
+      await SecureStore.deleteItemAsync('tokenExpiry');
+      setLoading(false)
+    }
+  };
 
   const contextData = {
     session,
     signin,
+    signup,
     logout,
-    user
+    user,
+    selectedChildId,
+    setSelectedChildId,
+    refreshUser,
   };
 
   return (
