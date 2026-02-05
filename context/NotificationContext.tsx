@@ -53,12 +53,15 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       (error) => {
         console.error("❌ Push token registration failed:", error);
         setError(error);
+        // Don't throw the error, just log it
       }
     );
 
     // Check current permission status
     Notifications.getPermissionsAsync().then((status) => {
       console.log("📱 Notification permissions:", status);
+    }).catch((error) => {
+      console.error("❌ Failed to get notification permissions:", error);
     });
 
     notificationListener.current =

@@ -5,6 +5,7 @@ import React from "react";
 import {
     ActivityIndicator,
     Alert,
+    ScrollView,
     Text,
     TextInput,
     TouchableOpacity,
@@ -13,8 +14,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import themes from "../../constants/colors";
 
+const validPhases = ["preparation", "pregnancy", "post_delivery"];
+
 export default function Register() {
-    const { session } = useAuth();
+    const { session, signup } = useAuth();
     const router = useRouter();
     const { top } = useSafeAreaInsets();
     const { colorScheme } = useColorScheme();
@@ -24,6 +27,7 @@ export default function Register() {
     const [email, setEmail] = React.useState("");
     const [password, setPassword] = React.useState("");
     const [confirmPassword, setConfirmPassword] = React.useState("");
+    const [phase, setPhase] = React.useState("preparation");
     const [loading, setLoading] = React.useState(false);
 
     const handleRegister = async () => {
@@ -39,38 +43,42 @@ export default function Register() {
 
         setLoading(true);
         try {
-            const response = await fetch("https://mom-stories.vercel.app/api/auth/register", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    name: name.trim(),
-                    email: email.trim(),
-                    password: password.trim(),
-                    phase: "fourth_trimester",
-                }),
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                Alert.alert(
-                    "Registration Successful",
-                    "A verification email has been sent to your inbox. Please verify your email and proceed to login.",
-                    [
-                        {
-                            text: "OK",
-                            onPress: () => router.push("/(auth)/login"),
-                        },
-                    ]
-                );
+            const result = await signup(name.trim(), email.trim(), password.trim(), phase);
+            
+            if (result.success) {
+                if (result.autoLogin) {
+                    // User is automatically logged in, navigation will happen via AuthContext
+                    Alert.alert(
+                        "Registration Successful",
+                        "Your account has been created and you are now logged in!",
+                        [
+                            {
+                                text: "OK",
+                                onPress: () => {
+                                    // Navigation will be handled automatically by the auth flow
+                                },
+                            },
+                        ]
+                    );
+                } else {
+                    // Redirect to login page
+                    Alert.alert(
+                        "Registration Successful",
+                        "Your account has been created successfully. Please proceed to login.",
+                        [
+                            {
+                                text: "OK",
+                                onPress: () => router.push("/(auth)/login"),
+                            },
+                        ]
+                    );
+                }
             } else {
-                Alert.alert("Registration Failed", data.message || "Something went wrong");
+                Alert.alert("Registration Failed", "Something went wrong. Please try again.");
             }
         } catch (error) {
+            console.error("Register: Error:", error);
             Alert.alert("Error", "Failed to register. Please try again.");
-            console.error("Registration error:", error);
         } finally {
             setLoading(false);
         }
@@ -86,92 +94,132 @@ export default function Register() {
                 backgroundColor: currentTheme.background,
             }}
         >
-            <View className="flex-1 justify-center items-center">
+            <ScrollView 
+                className="flex-1" 
+                contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 20 }}
+                keyboardShouldPersistTaps="handled"
+            >
+                <Text
+                    className="mb-8 font-bold text-4xl"
+                    style={{ color: currentTheme.foreground }}
+                >
+                    Register
+                </Text>
+                <TextInput
+                    className="mb-4 p-4 rounded-lg w-4/5"
+                    style={{
+                        backgroundColor: currentTheme.card,
+                        color: currentTheme.foreground,
+                    }}
+                    placeholder="Name"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                    value={name}
+                    onChangeText={setName}
+                    autoCapitalize="words"
+                />
+                <TextInput
+                    className="mb-4 p-4 rounded-lg w-4/5"
+                    style={{
+                        backgroundColor: currentTheme.card,
+                        color: currentTheme.foreground,
+                    }}
+                    placeholder="Email"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                />
+                <TextInput
+                    className="mb-4 p-4 rounded-lg w-4/5"
+                    style={{
+                        backgroundColor: currentTheme.card,
+                        color: currentTheme.foreground,
+                    }}
+                    placeholder="Password"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                />
+                <TextInput
+                    className="mb-4 p-4 rounded-lg w-4/5"
+                    style={{
+                        backgroundColor: currentTheme.card,
+                        color: currentTheme.foreground,
+                    }}
+                    placeholder="Confirm Password"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry
+                />
+                
+                {/* Phase Selection */}
+                <View className="mb-6 w-4/5">
                     <Text
-                        className="mb-8 font-bold text-4xl"
+                        className="mb-3 font-semibold text-base"
                         style={{ color: currentTheme.foreground }}
                     >
-                        Register
+                        Current Phase
                     </Text>
-                    <TextInput
-                        className="mb-4 p-4 rounded-lg w-4/5"
-                        style={{
-                            backgroundColor: currentTheme.card,
-                            color: currentTheme.foreground,
-                        }}
-                        placeholder="Name"
-                        placeholderTextColor={currentTheme.mutedForeground}
-                        value={name}
-                        onChangeText={setName}
-                        autoCapitalize="words"
-                    />
-                    <TextInput
-                        className="mb-4 p-4 rounded-lg w-4/5"
-                        style={{
-                            backgroundColor: currentTheme.card,
-                            color: currentTheme.foreground,
-                        }}
-                        placeholder="Email"
-                        placeholderTextColor={currentTheme.mutedForeground}
-                        value={email}
-                        onChangeText={setEmail}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                    />
-                    <TextInput
-                        className="mb-4 p-4 rounded-lg w-4/5"
-                        style={{
-                            backgroundColor: currentTheme.card,
-                            color: currentTheme.foreground,
-                        }}
-                        placeholder="Password"
-                        placeholderTextColor={currentTheme.mutedForeground}
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                    />
-                    <TextInput
-                        className="mb-8 p-4 rounded-lg w-4/5"
-                        style={{
-                            backgroundColor: currentTheme.card,
-                            color: currentTheme.foreground,
-                        }}
-                        placeholder="Confirm Password"
-                        placeholderTextColor={currentTheme.mutedForeground}
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        secureTextEntry
-                    />
-                    <TouchableOpacity
-                        className="items-center p-4 rounded-lg w-4/5"
-                        style={{ backgroundColor: currentTheme.primary }}
-                        onPress={handleRegister}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color={currentTheme.primaryForeground} />
-                        ) : (
-                            <Text
-                                className="font-bold text-lg"
-                                style={{ color: currentTheme.primaryForeground }}
+                    <View className="flex-row justify-between">
+                        {validPhases.map((phaseOption) => (
+                            <TouchableOpacity
+                                key={phaseOption}
+                                className="flex-1 mx-1 p-3 rounded-lg"
+                                style={{
+                                    backgroundColor: phase === phaseOption ? currentTheme.primary : currentTheme.card,
+                                    borderWidth: 1,
+                                    borderColor: phase === phaseOption ? currentTheme.primary : currentTheme.border,
+                                }}
+                                onPress={() => setPhase(phaseOption)}
                             >
-                                Register
-                            </Text>
-                        )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        className="mt-4"
-                        onPress={() => router.push("/(auth)/login")}
-                    >
+                                <Text
+                                    className="font-medium text-sm text-center"
+                                    style={{
+                                        color: phase === phaseOption ? currentTheme.primaryForeground : currentTheme.foreground,
+                                    }}
+                                >
+                                    {phaseOption === 'preparation' ? 'Preparing' : 
+                                     phaseOption === 'pregnancy' ? 'Pregnant' : 
+                                     'Post Delivery'}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
+                <TouchableOpacity
+                    className="items-center p-4 rounded-lg w-4/5"
+                    style={{ backgroundColor: currentTheme.primary }}
+                    onPress={handleRegister}
+                    disabled={loading}
+                >
+                    {loading ? (
+                        <ActivityIndicator color={currentTheme.primaryForeground} />
+                    ) : (
                         <Text
-                            className="text-base"
-                            style={{ color: currentTheme.mutedForeground }}
+                            className="font-bold text-lg"
+                            style={{ color: currentTheme.primaryForeground }}
                         >
-                            Already have an account?{" "}
-                            <Text style={{ color: currentTheme.primary }}>Login</Text>
+                            Register
                         </Text>
-                    </TouchableOpacity>
-            </View>
+                    )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                    className="mt-4"
+                    onPress={() => router.push("/(auth)/login")}
+                >
+                    <Text
+                        className="text-base"
+                        style={{ color: currentTheme.mutedForeground }}
+                    >
+                        Already have an account?{" "}
+                        <Text style={{ color: currentTheme.primary }}>Login</Text>
+                    </Text>
+                </TouchableOpacity>
+            </ScrollView>
         </View>
     );
 }
