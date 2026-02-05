@@ -45,7 +45,7 @@ interface BabyProfile {
 export default function BabyGrowthTab() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
-  const { session, user } = useAuth();
+  const { session, user, selectedChildId, setSelectedChildId, refreshUser } = useAuth();
   const [babyProfile, setBabyProfile] = useState<BabyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export default function BabyGrowthTab() {
 
       try {
         // Get childId from user profile
-        const childId = user?.childId;
+        const childId = selectedChildId;
 
         if (!childId) {
           setError('No baby profile selected');
@@ -109,7 +109,7 @@ export default function BabyGrowthTab() {
     };
 
     fetchBabyProfile();
-  }, [session, user]);
+  }, [session, selectedChildId]);
 
   const handleCreateProfile = async () => {
     if (!profileName || !profileBirthday || !profileBirthWeight || !profileBirthHeight) {
@@ -154,6 +154,14 @@ export default function BabyGrowthTab() {
       setShowCreateProfile(false);
       setError(null);
 
+      // Refresh user data to get updated childrenIds
+      await refreshUser();
+      
+      // Set the newly created child as selected
+      if (data.profile?.id) {
+        setSelectedChildId(data.profile.id);
+      }
+
       Alert.alert('Success', data.message || 'Child profile created successfully!');
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create profile');
@@ -173,7 +181,7 @@ export default function BabyGrowthTab() {
       return;
     }
 
-    const childId = user?.childId || babyProfile?.id;
+    const childId = selectedChildId || babyProfile?.id;
     if (!childId) {
       Alert.alert('Error', 'No child profile found');
       return;

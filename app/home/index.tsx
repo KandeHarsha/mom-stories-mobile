@@ -48,7 +48,7 @@ interface BabyProfile {
 export default function Home() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
-  const { session, user } = useAuth();
+  const { session, user, selectedChildId, setSelectedChildId, refreshUser } = useAuth();
   const {notification, expoPushToken, error } = useNotification();
   const router = useRouter();
   const [babyProfile, setBabyProfile] = useState<BabyProfile | null>(null);
@@ -75,19 +75,17 @@ export default function Home() {
 
   const styles = createStyles(currentTheme);
 
-  console.log("PushNotification Token: ", expoPushToken);
-  console.log("Notification: ", JSON.stringify(notification?.request.content.data, null, 2));
-  console.log("Notification Title: ", notification?.request.content.title)
-
   useEffect(() => {
     const fetchBabyProfile = async () => {
-      if (!session?.accessToken || !user?.childId) {
+      
+      
+      if (!session?.accessToken || !selectedChildId) {
         setLoading(false);
         return;
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/children/${user.childId}`, {
+        const response = await fetch(`${API_BASE_URL}/children/${selectedChildId}`, {
           headers: {
             'Authorization': `Bearer ${session.accessToken}`,
           },
@@ -105,7 +103,7 @@ export default function Home() {
     };
 
     fetchBabyProfile();
-  }, [session, user]);
+  }, [session, selectedChildId]);
 
   const handleCreateProfile = async () => {
     if (!profileName || !profileBirthday || !profileBirthWeight || !profileBirthHeight) {
@@ -157,23 +155,16 @@ export default function Home() {
       setProfileBirthWeight('');
       setProfileBirthHeight('');
 
-      // Show success message and reload to refresh user data
-      Alert.alert(
-        'Success', 
-        data.message || 'Child profile created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Navigate away and back to force a refresh of user data
-              router.replace('/(tabs)/healthTracker');
-              setTimeout(() => {
-                router.replace('/(tabs)');
-              }, 100);
-            }
-          }
-        ]
-      );
+      // Refresh user data to get updated childrenIds
+      await refreshUser();
+      
+      // Set the newly created child as selected
+      if (createdProfile?.id) {
+        setSelectedChildId(createdProfile.id);
+      }
+
+      // Show success message
+      Alert.alert('Success', data.message || 'Child profile created successfully!');
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create profile');
     } finally {
@@ -192,7 +183,7 @@ export default function Home() {
       return;
     }
 
-    const childId = user?.childId || babyProfile?.id;
+    const childId = selectedChildId || babyProfile?.id;
     if (!childId) {
       Alert.alert('Error', 'No child profile found');
       return;
