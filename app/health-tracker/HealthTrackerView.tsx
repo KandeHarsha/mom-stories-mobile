@@ -4,16 +4,18 @@ import { useColorScheme } from 'nativewind';
 import React, { useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AppointmentsTab from './AppointmentsTab';
 import BabyGrowthTab from './BabyGrowthTab';
 import MomWellnessTab from './MomWellnessTab';
 import VaccinationTabNew from './VaccinationTabNew';
 
-type TabType = 'growth' | 'vaccinations' | 'wellness';
+type TabType = 'growth' | 'vaccinations' | 'wellness' | 'appointments';
 
 const tabs = [
   { id: 'growth' as TabType, label: 'Baby Growth', icon: Baby },
   { id: 'vaccinations' as TabType, label: 'Vaccinations', icon: Baby },
   { id: 'wellness' as TabType, label: 'Mom Wellness', icon: Baby },
+  { id: 'appointments' as TabType, label: 'Appointments', icon: Baby },
 ];
 
 export default function HealthTrackerView() {
@@ -31,6 +33,8 @@ export default function HealthTrackerView() {
         return <VaccinationTabNew />;
       case 'wellness':
         return <MomWellnessTab />;
+      case 'appointments':
+        return <AppointmentsTab />;
       default:
         return <BabyGrowthTab />;
     }
