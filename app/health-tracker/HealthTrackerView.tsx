@@ -1,27 +1,47 @@
 import themes from '@/constants/colors';
+import { useAuth } from '@/context/AuthContext';
 import { Baby } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AppointmentsTab from './AppointmentsTab';
 import BabyGrowthTab from './BabyGrowthTab';
 import MomWellnessTab from './MomWellnessTab';
 import VaccinationTabNew from './VaccinationTabNew';
 
-type TabType = 'growth' | 'vaccinations' | 'wellness';
+type TabType = 'growth' | 'vaccinations' | 'wellness' | 'appointments';
 
-const tabs = [
-  { id: 'growth' as TabType, label: 'Baby Growth', icon: Baby },
-  { id: 'vaccinations' as TabType, label: 'Vaccinations', icon: Baby },
-  { id: 'wellness' as TabType, label: 'Mom Wellness', icon: Baby },
+const allTabs = [
+  { id: 'growth' as TabType, label: 'Baby Growth', icon: Baby, requiresPostPregnancy: true },
+  { id: 'vaccinations' as TabType, label: 'Vaccinations', icon: Baby, requiresPostPregnancy: true },
+  { id: 'wellness' as TabType, label: 'Mom Wellness', icon: Baby, requiresPostPregnancy: false },
+  { id: 'appointments' as TabType, label: 'Appointments', icon: Baby, requiresPostPregnancy: false },
 ];
 
 export default function HealthTrackerView() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
-  const [activeTab, setActiveTab] = useState<TabType>('growth');
+  const { user } = useAuth();
   const screenWidth = Dimensions.get('window').width;
   const isTablet = screenWidth > 768;
+
+  // Filter tabs based on user phase
+  const tabs = useMemo(() => {
+    const isPostPregnancy = user?.phase === 'post_pregnancy';
+    return allTabs.filter(tab => !tab.requiresPostPregnancy || isPostPregnancy);
+  }, [user?.phase]);
+
+  // Set initial active tab based on available tabs
+  const [activeTab, setActiveTab] = useState<TabType>(tabs[0]?.id || 'wellness');
+
+  // Update active tab if current tab becomes unavailable
+  useEffect(() => {
+    const isActiveTabAvailable = tabs.some(tab => tab.id === activeTab);
+    if (!isActiveTabAvailable && tabs.length > 0) {
+      setActiveTab(tabs[0].id);
+    }
+  }, [tabs, activeTab]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -31,6 +51,8 @@ export default function HealthTrackerView() {
         return <VaccinationTabNew />;
       case 'wellness':
         return <MomWellnessTab />;
+      case 'appointments':
+        return <AppointmentsTab />;
       default:
         return <BabyGrowthTab />;
     }
@@ -47,7 +69,9 @@ export default function HealthTrackerView() {
           <View style={styles.headerText}>
             <Text style={styles.title}>Growth & Health Tools</Text>
             <Text style={styles.subtitle}>
-              Keep track of important milestones and health data for you and your baby.
+              {user?.phase === 'post_pregnancy' 
+                ? 'Keep track of important milestones and health data for you and your baby.'
+                : 'Track your appointments and wellness during pregnancy.'}
             </Text>
           </View>
         </View>
