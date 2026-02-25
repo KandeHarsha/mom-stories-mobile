@@ -2,7 +2,7 @@ import themes from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { Calendar as CalendarIcon, CalendarPlus, Plus, Stethoscope, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -53,11 +53,7 @@ export default function AppointmentsTab() {
 
   const styles = createStyles(currentTheme);
 
-  useEffect(() => {
-    fetchAppointments();
-  }, [session]);
-
-  const fetchAppointments = async () => {
+  const fetchAppointments = useCallback(async () => {
     if (!session?.accessToken) {
       setError('Not authenticated');
       setLoading(false);
@@ -83,7 +79,11 @@ export default function AppointmentsTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session?.accessToken]);
+
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
 
   const handleAddAppointment = async () => {
     if (!appointmentDate) {
