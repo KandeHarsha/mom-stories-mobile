@@ -3,21 +3,21 @@ import { WHO_LENGTH_CM_RANGES, WHO_WEIGHT_KG_RANGES } from '@/constants/growthDa
 import { useAuth } from '@/context/AuthContext';
 import { useNotification } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
-import { Baby, BookHeart, Calendar, CalendarIcon, Heart, Plus, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
+import { Baby, BookHeart, Calendar, CalendarIcon, Heart, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { Calendar as RNCalendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,16 +63,6 @@ export default function Home() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Create profile modal states
-  const [showCreateProfile, setShowCreateProfile] = useState(false);
-  const [profileName, setProfileName] = useState('');
-  const [profileGender, setProfileGender] = useState('Male');
-  const [profileBirthday, setProfileBirthday] = useState('');
-  const [showBirthdayCalendar, setShowBirthdayCalendar] = useState(false);
-  const [profileBirthWeight, setProfileBirthWeight] = useState('');
-  const [profileBirthHeight, setProfileBirthHeight] = useState('');
-  const [creatingProfile, setCreatingProfile] = useState(false);
-
   const styles = createStyles(currentTheme);
 
   useEffect(() => {
@@ -104,73 +94,6 @@ export default function Home() {
 
     fetchBabyProfile();
   }, [session, selectedChildId]);
-
-  const handleCreateProfile = async () => {
-    if (!profileName || !profileBirthday || !profileBirthWeight || !profileBirthHeight) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    if (!session?.accessToken) {
-      Alert.alert('Error', 'Authentication required');
-      return;
-    }
-
-    setCreatingProfile(true);
-
-    try {
-      const birthdayISO = new Date(profileBirthday).toISOString();
-
-      const body = {
-        name: profileName,
-        birthday: birthdayISO,
-        birthWeight: profileBirthWeight,
-        birthHeight: profileBirthHeight,
-        gender: profileGender,
-      };
-
-      const response = await fetch(`${API_BASE_URL}/children`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || 'Failed to create profile');
-      }
-
-      const data = await response.json();
-      const createdProfile = data.profile;
-      setBabyProfile(createdProfile);
-      setShowCreateProfile(false);
-
-      // Reset form
-      setProfileName('');
-      setProfileGender('Male');
-      setProfileBirthday('');
-      setProfileBirthWeight('');
-      setProfileBirthHeight('');
-
-      // Refresh user data to get updated childrenIds
-      await refreshUser();
-      
-      // Set the newly created child as selected
-      if (createdProfile?.id) {
-        setSelectedChildId(createdProfile.id);
-      }
-
-      // Show success message
-      Alert.alert('Success', data.message || 'Child profile created successfully!');
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create profile');
-    } finally {
-      setCreatingProfile(false);
-    }
-  };
 
   const handleAddMeasurement = async () => {
     if (!weight && !height) {
@@ -342,21 +265,7 @@ export default function Home() {
               </View>
             </View>
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.addChildCard}
-            onPress={() => setShowCreateProfile(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.addChildIconContainer}>
-              <Plus size={32} color={currentTheme.primary} />
-            </View>
-            <Text style={styles.addChildTitle}>Add Your Child's Profile</Text>
-            <Text style={styles.addChildDescription}>
-              Track your baby's growth and development
-            </Text>
-          </TouchableOpacity>
-        )}
+        ) : null}
 
         {/* Growth Details Card */}
         {babyProfile && (
@@ -630,184 +539,6 @@ export default function Home() {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
-
-      {/* Create Profile Modal */}
-      <Modal
-        visible={showCreateProfile}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowCreateProfile(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowCreateProfile(false)}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
-              style={styles.modalContent}
-            >
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Create Child Profile</Text>
-                <TouchableOpacity onPress={() => setShowCreateProfile(false)}>
-                  <X size={24} color={currentTheme.foreground} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                style={styles.formContainer}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Name *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter your child's name"
-                    value={profileName}
-                    onChangeText={setProfileName}
-                    placeholderTextColor={currentTheme.mutedForeground}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Gender *</Text>
-                  <View style={styles.genderContainer}>
-                    <TouchableOpacity
-                      style={[
-                        styles.genderButton,
-                        profileGender === 'Male' && styles.genderButtonActive,
-                      ]}
-                      onPress={() => setProfileGender('Male')}
-                    >
-                      <Text
-                        style={[
-                          styles.genderButtonText,
-                          profileGender === 'Male' && styles.genderButtonTextActive,
-                        ]}
-                      >
-                        Boy
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.genderButton,
-                        profileGender === 'Female' && styles.genderButtonActive,
-                      ]}
-                      onPress={() => setProfileGender('Female')}
-                    >
-                      <Text
-                        style={[
-                          styles.genderButtonText,
-                          profileGender === 'Female' && styles.genderButtonTextActive,
-                        ]}
-                      >
-                        Girl
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Birthday *</Text>
-                  <TouchableOpacity
-                    style={styles.dateButton}
-                    onPress={() => setShowBirthdayCalendar(!showBirthdayCalendar)}
-                  >
-                    <CalendarIcon size={20} color={currentTheme.mutedForeground} />
-                    <Text style={styles.dateButtonText}>
-                      {profileBirthday
-                        ? new Date(profileBirthday).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })
-                        : 'Select birthday'}
-                    </Text>
-                  </TouchableOpacity>
-                  {showBirthdayCalendar && (
-                    <RNCalendar
-                      current={profileBirthday || new Date().toISOString().split('T')[0]}
-                      onDayPress={(day) => {
-                        setProfileBirthday(day.dateString);
-                        setShowBirthdayCalendar(false);
-                      }}
-                      maxDate={new Date().toISOString().split('T')[0]}
-                      theme={{
-                        backgroundColor: currentTheme.card,
-                        calendarBackground: currentTheme.card,
-                        textSectionTitleColor: currentTheme.mutedForeground,
-                        selectedDayBackgroundColor: currentTheme.primary,
-                        selectedDayTextColor: currentTheme.primaryForeground,
-                        todayTextColor: currentTheme.primary,
-                        dayTextColor: currentTheme.cardForeground,
-                        textDisabledColor: currentTheme.mutedForeground,
-                        monthTextColor: currentTheme.cardForeground,
-                        arrowColor: currentTheme.primary,
-                      }}
-                      style={styles.calendar}
-                    />
-                  )}
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Birth Weight (kg) *</Text>
-                  <View style={styles.inputWithIcon}>
-                    <Scale size={20} color={currentTheme.mutedForeground} />
-                    <TextInput
-                      style={styles.inputField}
-                      placeholder="e.g., 3.4"
-                      value={profileBirthWeight}
-                      onChangeText={setProfileBirthWeight}
-                      keyboardType="decimal-pad"
-                      placeholderTextColor={currentTheme.mutedForeground}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Birth Height (cm) *</Text>
-                  <View style={styles.inputWithIcon}>
-                    <Ruler size={20} color={currentTheme.mutedForeground} />
-                    <TextInput
-                      style={styles.inputField}
-                      placeholder="e.g., 50"
-                      value={profileBirthHeight}
-                      onChangeText={setProfileBirthHeight}
-                      keyboardType="decimal-pad"
-                      placeholderTextColor={currentTheme.mutedForeground}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.modalActions}>
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={() => setShowCreateProfile(false)}
-                    disabled={creatingProfile}
-                  >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.submitButton, creatingProfile && styles.submitButtonDisabled]}
-                    onPress={handleCreateProfile}
-                    disabled={creatingProfile}
-                  >
-                    <Text style={styles.submitButtonText}>
-                      {creatingProfile ? 'Creating...' : 'Create Profile'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -912,36 +643,6 @@ const createStyles = (theme: any) => StyleSheet.create({
     width: 1,
     backgroundColor: theme.border,
     marginHorizontal: 16,
-  },
-  addChildCard: {
-    backgroundColor: theme.card,
-    borderRadius: 16,
-    padding: 32,
-    marginBottom: 24,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderStyle: 'dashed',
-  },
-  addChildIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: theme.primary + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  addChildTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.foreground,
-    marginBottom: 8,
-  },
-  addChildDescription: {
-    fontSize: 14,
-    color: theme.mutedForeground,
-    textAlign: 'center',
   },
   growthDetailsCard: {
     backgroundColor: theme.card,
