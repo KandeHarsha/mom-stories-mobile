@@ -27,12 +27,13 @@ function RootLayoutNav() {
   useEffect(() => {
     const inAuthGroup = segments[0] === "(auth)";
     const inTabsGroup = segments[0] === "(tabs)";
+    const isVerifyEmail = segments[0] === "(auth)" && segments[1] === "verifyEmail";
 
     if (!session && inTabsGroup) {
       // User is not authenticated but trying to access protected routes
       router.replace("/(auth)/login");
-    } else if (session && inAuthGroup) {
-      // User is authenticated but on auth pages
+    } else if (session && inAuthGroup && !isVerifyEmail) {
+      // User is authenticated but on auth pages (except verifyEmail)
       router.replace("/(tabs)");
     }
   }, [session, segments]);

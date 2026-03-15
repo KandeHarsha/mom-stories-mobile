@@ -3,11 +3,11 @@ import { Redirect, useRouter } from "expo-router";
 import { useColorScheme } from "nativewind";
 import React from "react";
 import {
-    ActivityIndicator,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import themes from "../../constants/colors";
@@ -92,6 +92,17 @@ export default function Login() {
         </TouchableOpacity>
         <TouchableOpacity
           className="mt-4"
+          onPress={() => router.push("/(auth)/forgotPassword")}
+        >
+          <Text
+            className="text-base"
+            style={{ color: currentTheme.primary }}
+          >
+            Forgot Password?
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          className="mt-2"
           onPress={() => router.push("/(auth)/register")}
         >
           <Text
