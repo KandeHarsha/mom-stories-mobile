@@ -157,7 +157,7 @@ const ProfileScreen = () => {
       title: 'Help & Support',
       subtitle: 'Get help and contact support',
       icon: HelpCircle,
-      onPress: () => Alert.alert('Coming Soon', 'Help & support will be available soon')
+      onPress: () => router.push('/profile/customerSupport')
     }
   ]
 
