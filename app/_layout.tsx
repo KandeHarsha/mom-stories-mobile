@@ -54,6 +54,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="journal/[entryId]" options={{ headerShown: false }} />
+      <Stack.Screen name="profile/customerSupport" options={{ headerShown: false }} />
     </Stack>
   );
 }
