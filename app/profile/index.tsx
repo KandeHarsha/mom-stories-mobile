@@ -5,13 +5,13 @@ import { Baby, ChevronRight, HelpCircle, LogIn, LogOut, Settings, Shield, User }
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useState } from 'react'
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -88,13 +88,55 @@ const ProfileScreen = () => {
     fetchChildren();
   }, [session, user]);
 
+  const handleVerifyEmail = async () => {
+    if (!session?.accessToken || !user?.email) {
+      Alert.alert('Error', 'Unable to verify email. Please try again.');
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/auth/email-otp/send-verification-otp`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Origin': `${API_BASE_URL}`,
+            'Authorization': `Bearer ${session.accessToken}`,
+          },
+          body: JSON.stringify({
+            email: user.email,
+            type: 'email-verification',
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        router.push('/(auth)/verifyEmail');
+      } else {
+        Alert.alert(
+          'Error',
+          data.message || 'Failed to send verification OTP. Please try again.'
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        'An error occurred while sending verification OTP. Please try again.'
+      );
+      console.error('Send verification OTP error:', error);
+    }
+  };
+
   const menuItems = [
     ...(session && user?.emailVerified === false ? [{
       id: 'verify-email',
       title: 'Verify Email',
       subtitle: 'Verify your email address to secure your account',
       icon: Shield,
-      onPress: () => Alert.alert('Email Verification', 'Email verification feature will be available soon')
+      onPress: handleVerifyEmail
     }] : []),
     {
       id: 'account',
