@@ -1,6 +1,7 @@
 import themes from '@/constants/colors'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'expo-router'
+import * as Updates from 'expo-updates'
 import { Baby, ChevronRight, HelpCircle, LogIn, LogOut, Settings, Shield, User } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useState } from 'react'
@@ -24,7 +25,32 @@ const ProfileScreen = () => {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [children, setChildren] = useState<any[]>([])
   const [loadingChildren, setLoadingChildren] = useState(false)
+  const [isCheckingForUpdate, setIsCheckingForUpdate] = useState(false)
+  const [isDownloadingUpdate, setIsDownloadingUpdate] = useState(false)
   const router = useRouter()
+
+  // Updates hook
+  const {
+    currentlyRunning,
+    isUpdateAvailable,
+    isUpdatePending
+  } = Updates.useUpdates()
+
+  // Auto-apply pending updates
+  useEffect(() => {
+    if (isUpdatePending) {
+      Alert.alert(
+        'Update Ready',
+        'A new update has been downloaded and will be applied now.',
+        [
+          {
+            text: 'OK',
+            onPress: () => Updates.reloadAsync()
+          }
+        ]
+      )
+    }
+  }, [isUpdatePending])
 
   const handleLogout = () => {
     Alert.alert(
@@ -52,6 +78,46 @@ const ProfileScreen = () => {
 
   const handleLogin = () => {
     router.replace('/(auth)/login')
+  }
+
+  const handleCheckForUpdates = async () => {
+    setIsCheckingForUpdate(true)
+    try {
+      const update = await Updates.checkForUpdateAsync()
+      if (update.isAvailable) {
+        Alert.alert(
+          'Update Available',
+          'A new update is available. Would you like to download it now?',
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Download', onPress: handleDownloadUpdate }
+          ]
+        )
+      } else {
+        Alert.alert('No Updates', 'You are already on the latest version.')
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to check for updates. Please try again later.')
+      console.error('Check for update error:', error)
+    } finally {
+      setIsCheckingForUpdate(false)
+    }
+  }
+
+  const handleDownloadUpdate = async () => {
+    setIsDownloadingUpdate(true)
+    try {
+      await Updates.fetchUpdateAsync()
+      Alert.alert(
+        'Update Downloaded',
+        'The update has been downloaded and will be applied shortly.'
+      )
+    } catch (error) {
+      Alert.alert('Error', 'Failed to download update. Please try again later.')
+      console.error('Download update error:', error)
+    } finally {
+      setIsDownloadingUpdate(false)
+    }
   }
 
   // Fetch children data
@@ -333,6 +399,45 @@ const ProfileScreen = () => {
         <View style={styles.appInfo}>
           <Text style={styles.appInfoText}>Mom Stories Mobile</Text>
           <Text style={styles.appInfoText}>Version 1.0.0</Text>
+          <Text style={[styles.appInfoText, { marginTop: 8 }]}>
+            {currentlyRunning.isEmbeddedLaunch
+              ? 'Running built-in version'
+              : 'Running from update'}
+          </Text>
+          
+          {/* Check for Updates Button */}
+          <TouchableOpacity
+            style={[styles.updateButton, { marginTop: 16 }]}
+            onPress={handleCheckForUpdates}
+            disabled={isCheckingForUpdate || isDownloadingUpdate}
+            activeOpacity={0.7}
+          >
+            {isCheckingForUpdate ? (
+              <ActivityIndicator size="small" color={currentTheme.primaryForeground} />
+            ) : (
+              <Text style={styles.updateButtonText}>
+                Check for Updates
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Download Update Button (shown when update is available) */}
+          {isUpdateAvailable && (
+            <TouchableOpacity
+              style={[styles.updateButton, styles.downloadButton, { marginTop: 8 }]}
+              onPress={handleDownloadUpdate}
+              disabled={isDownloadingUpdate}
+              activeOpacity={0.7}
+            >
+              {isDownloadingUpdate ? (
+                <ActivityIndicator size="small" color={currentTheme.primaryForeground} />
+              ) : (
+                <Text style={styles.updateButtonText}>
+                  Download and Apply Update
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -526,6 +631,23 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 12,
     color: theme.mutedForeground,
     marginBottom: 2,
+  },
+  updateButton: {
+    backgroundColor: theme.primary,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    minWidth: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  updateButtonText: {
+    color: theme.primaryForeground,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  downloadButton: {
+    backgroundColor: theme.primary,
   },
   loadingContainer: {
     padding: 20,

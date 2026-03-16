@@ -120,7 +120,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "policy": "appVersion"
   },
   "updates": {
-    "url": "https://u.expo.dev/6191c5e8-06ba-470a-a0db-303018204760"
+    "url": "https://u.expo.dev/e106ee42-ff8a-4fcb-acac-12a09ee1f5b4"
   },
   "extra": {
     "router": {},
