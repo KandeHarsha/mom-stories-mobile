@@ -2,7 +2,7 @@ import themes from '@/constants/colors'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'expo-router'
 import * as Updates from 'expo-updates'
-import { Baby, ChevronRight, HelpCircle, LogIn, LogOut, Settings, Shield, User } from 'lucide-react-native'
+import { Baby, ChevronRight, Download, HelpCircle, LogIn, LogOut, RefreshCw, Settings, Shield, User } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useState } from 'react'
 import {
@@ -405,39 +405,42 @@ const ProfileScreen = () => {
               : 'Running from update'}
           </Text>
           
-          {/* Check for Updates Button */}
-          <TouchableOpacity
-            style={[styles.updateButton, { marginTop: 16 }]}
-            onPress={handleCheckForUpdates}
-            disabled={isCheckingForUpdate || isDownloadingUpdate}
-            activeOpacity={0.7}
-          >
-            {isCheckingForUpdate ? (
-              <ActivityIndicator size="small" color={currentTheme.primaryForeground} />
-            ) : (
-              <Text style={styles.updateButtonText}>
-                Check for Updates
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Download Update Button (shown when update is available) */}
-          {isUpdateAvailable && (
+          {/* Update Actions */}
+          <View style={styles.updateLinksContainer}>
             <TouchableOpacity
-              style={[styles.updateButton, styles.downloadButton, { marginTop: 8 }]}
-              onPress={handleDownloadUpdate}
-              disabled={isDownloadingUpdate}
+              style={styles.updateLink}
+              onPress={handleCheckForUpdates}
+              disabled={isCheckingForUpdate || isDownloadingUpdate}
               activeOpacity={0.7}
             >
-              {isDownloadingUpdate ? (
-                <ActivityIndicator size="small" color={currentTheme.primaryForeground} />
+              {isCheckingForUpdate ? (
+                <ActivityIndicator size={14} color={currentTheme.primary} />
               ) : (
-                <Text style={styles.updateButtonText}>
-                  Download and Apply Update
-                </Text>
+                <RefreshCw size={14} color={currentTheme.primary} />
               )}
+              <Text style={styles.updateLinkText}>
+                {isCheckingForUpdate ? 'Checking...' : 'Check for Updates'}
+              </Text>
             </TouchableOpacity>
-          )}
+
+            {isUpdateAvailable && (
+              <TouchableOpacity
+                style={styles.updateLink}
+                onPress={handleDownloadUpdate}
+                disabled={isDownloadingUpdate}
+                activeOpacity={0.7}
+              >
+                {isDownloadingUpdate ? (
+                  <ActivityIndicator size={14} color={currentTheme.primary} />
+                ) : (
+                  <Download size={14} color={currentTheme.primary} />
+                )}
+                <Text style={styles.updateLinkText}>
+                  {isDownloadingUpdate ? 'Downloading...' : 'Download Update'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -632,22 +635,23 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.mutedForeground,
     marginBottom: 2,
   },
-  updateButton: {
-    backgroundColor: theme.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    minWidth: 200,
+  updateLinksContainer: {
+    marginTop: 16,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
   },
-  updateButtonText: {
-    color: theme.primaryForeground,
-    fontSize: 14,
-    fontWeight: '600',
+  updateLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
-  downloadButton: {
-    backgroundColor: theme.primary,
+  updateLinkText: {
+    fontSize: 13,
+    color: theme.primary,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   loadingContainer: {
     padding: 20,
