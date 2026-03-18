@@ -109,6 +109,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         "sounds": ["./assets/notification_sound.wav"],
         "mode": "production"
       }
+    ],
+    [
+      "@sentry/react-native/expo",
+      {
+        "url": "https://sentry.io/",
+        "project": "react-native",
+        "organization": "mom-stories"
+      }
     ]
   ],
   "experiments": {
