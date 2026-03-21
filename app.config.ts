@@ -60,11 +60,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     }
   },
   "android": {
+    "icon": "./assets/images/icon.png",
     "adaptiveIcon": {
       "backgroundColor": "#E6F4FE",
-      "foregroundImage": "./assets/images/android-icon-foreground.png",
-      "backgroundImage": "./assets/images/android-icon-background.png",
-      "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      "foregroundImage": "./assets/images/icon.png"
     },
     "edgeToEdgeEnabled": true,
     "predictiveBackGestureEnabled": false,
@@ -107,8 +106,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         "icon": "./assets/images/icon.png",
         "color": "#ffffff",
-        "sounds": ["./assets/notification-sound.wav"],
+        "sounds": ["./assets/notification_sound.wav"],
         "mode": "production"
+      }
+    ],
+    [
+      "@sentry/react-native/expo",
+      {
+        "url": "https://sentry.io/",
+        "project": "react-native",
+        "organization": "mom-stories"
       }
     ]
   ],
@@ -120,7 +127,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "policy": "appVersion"
   },
   "updates": {
-    "url": "https://u.expo.dev/6191c5e8-06ba-470a-a0db-303018204760"
+    "url": "https://u.expo.dev/e106ee42-ff8a-4fcb-acac-12a09ee1f5b4"
   },
   "extra": {
     "router": {},

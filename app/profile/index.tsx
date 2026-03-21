@@ -1,17 +1,18 @@
 import themes from '@/constants/colors'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'expo-router'
-import { Baby, ChevronRight, HelpCircle, LogIn, LogOut, Settings, Shield, User } from 'lucide-react-native'
+import * as Updates from 'expo-updates'
+import { Baby, ChevronRight, Download, HelpCircle, LogIn, LogOut, RefreshCw, Settings, Shield, User } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useState } from 'react'
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -24,7 +25,32 @@ const ProfileScreen = () => {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [children, setChildren] = useState<any[]>([])
   const [loadingChildren, setLoadingChildren] = useState(false)
+  const [isCheckingForUpdate, setIsCheckingForUpdate] = useState(false)
+  const [isDownloadingUpdate, setIsDownloadingUpdate] = useState(false)
   const router = useRouter()
+
+  // Updates hook
+  const {
+    currentlyRunning,
+    isUpdateAvailable,
+    isUpdatePending
+  } = Updates.useUpdates()
+
+  // Auto-apply pending updates
+  useEffect(() => {
+    if (isUpdatePending) {
+      Alert.alert(
+        'Update Ready',
+        'A new update has been downloaded and will be applied now.',
+        [
+          {
+            text: 'OK',
+            onPress: () => Updates.reloadAsync()
+          }
+        ]
+      )
+    }
+  }, [isUpdatePending])
 
   const handleLogout = () => {
     Alert.alert(
@@ -52,6 +78,46 @@ const ProfileScreen = () => {
 
   const handleLogin = () => {
     router.replace('/(auth)/login')
+  }
+
+  const handleCheckForUpdates = async () => {
+    setIsCheckingForUpdate(true)
+    try {
+      const update = await Updates.checkForUpdateAsync()
+      if (update.isAvailable) {
+        Alert.alert(
+          'Update Available',
+          'A new update is available. Would you like to download it now?',
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Download', onPress: handleDownloadUpdate }
+          ]
+        )
+      } else {
+        Alert.alert('No Updates', 'You are already on the latest version.')
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to check for updates. Please try again later.')
+      console.error('Check for update error:', error)
+    } finally {
+      setIsCheckingForUpdate(false)
+    }
+  }
+
+  const handleDownloadUpdate = async () => {
+    setIsDownloadingUpdate(true)
+    try {
+      await Updates.fetchUpdateAsync()
+      Alert.alert(
+        'Update Downloaded',
+        'The update has been downloaded and will be applied shortly.'
+      )
+    } catch (error) {
+      Alert.alert('Error', 'Failed to download update. Please try again later.')
+      console.error('Download update error:', error)
+    } finally {
+      setIsDownloadingUpdate(false)
+    }
   }
 
   // Fetch children data
@@ -88,13 +154,55 @@ const ProfileScreen = () => {
     fetchChildren();
   }, [session, user]);
 
+  const handleVerifyEmail = async () => {
+    if (!session?.accessToken || !user?.email) {
+      Alert.alert('Error', 'Unable to verify email. Please try again.');
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/auth/email-otp/send-verification-otp`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Origin': `${API_BASE_URL}`,
+            'Authorization': `Bearer ${session.accessToken}`,
+          },
+          body: JSON.stringify({
+            email: user.email,
+            type: 'email-verification',
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        router.push('/(auth)/verifyEmail');
+      } else {
+        Alert.alert(
+          'Error',
+          data.message || 'Failed to send verification OTP. Please try again.'
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        'An error occurred while sending verification OTP. Please try again.'
+      );
+      console.error('Send verification OTP error:', error);
+    }
+  };
+
   const menuItems = [
     ...(session && user?.emailVerified === false ? [{
       id: 'verify-email',
       title: 'Verify Email',
       subtitle: 'Verify your email address to secure your account',
       icon: Shield,
-      onPress: () => Alert.alert('Email Verification', 'Email verification feature will be available soon')
+      onPress: handleVerifyEmail
     }] : []),
     {
       id: 'account',
@@ -115,7 +223,7 @@ const ProfileScreen = () => {
       title: 'Help & Support',
       subtitle: 'Get help and contact support',
       icon: HelpCircle,
-      onPress: () => Alert.alert('Coming Soon', 'Help & support will be available soon')
+      onPress: () => router.push('/profile/customerSupport')
     }
   ]
 
@@ -291,6 +399,48 @@ const ProfileScreen = () => {
         <View style={styles.appInfo}>
           <Text style={styles.appInfoText}>Mom Stories Mobile</Text>
           <Text style={styles.appInfoText}>Version 1.0.0</Text>
+          <Text style={[styles.appInfoText, { marginTop: 8 }]}>
+            {currentlyRunning.isEmbeddedLaunch
+              ? 'Running built-in version'
+              : 'Running from update'}
+          </Text>
+          
+          {/* Update Actions */}
+          <View style={styles.updateLinksContainer}>
+            <TouchableOpacity
+              style={styles.updateLink}
+              onPress={handleCheckForUpdates}
+              disabled={isCheckingForUpdate || isDownloadingUpdate}
+              activeOpacity={0.7}
+            >
+              {isCheckingForUpdate ? (
+                <ActivityIndicator size={14} color={currentTheme.primary} />
+              ) : (
+                <RefreshCw size={14} color={currentTheme.primary} />
+              )}
+              <Text style={styles.updateLinkText}>
+                {isCheckingForUpdate ? 'Checking...' : 'Check for Updates'}
+              </Text>
+            </TouchableOpacity>
+
+            {isUpdateAvailable && (
+              <TouchableOpacity
+                style={styles.updateLink}
+                onPress={handleDownloadUpdate}
+                disabled={isDownloadingUpdate}
+                activeOpacity={0.7}
+              >
+                {isDownloadingUpdate ? (
+                  <ActivityIndicator size={14} color={currentTheme.primary} />
+                ) : (
+                  <Download size={14} color={currentTheme.primary} />
+                )}
+                <Text style={styles.updateLinkText}>
+                  {isDownloadingUpdate ? 'Downloading...' : 'Download Update'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -484,6 +634,24 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 12,
     color: theme.mutedForeground,
     marginBottom: 2,
+  },
+  updateLinksContainer: {
+    marginTop: 16,
+    alignItems: 'center',
+    gap: 12,
+  },
+  updateLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  updateLinkText: {
+    fontSize: 13,
+    color: theme.primary,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   loadingContainer: {
     padding: 20,
