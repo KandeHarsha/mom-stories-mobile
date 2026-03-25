@@ -1,5 +1,6 @@
 import themes from '@/constants/colors'
 import { useAuth } from '@/context/AuthContext'
+import { useSwipeDrawer } from '@/hooks'
 import { Bookmark, ChevronRight, Menu, MessageCircle, Plus, Send, X } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useRef, useState } from 'react'
@@ -7,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -21,8 +21,6 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import SavedResponses from './SavedResponses'
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
-const DRAWER_WIDTH = SCREEN_WIDTH * 0.8
 
 interface Timestamp {
   seconds: number
@@ -88,10 +86,22 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [isLoadingSessions, setIsLoadingSessions] = useState(false)
   const [currentSessionTitle, setCurrentSessionTitle] = useState<string>('New Chat')
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
 
   const scrollViewRef = useRef<ScrollView>(null)
-  const drawerAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current
+  
+  // Swipe drawer hook for gesture support
+  const {
+    isOpen: isDrawerOpen,
+    drawerAnim,
+    panHandlers,
+    openDrawer,
+    closeDrawer,
+    drawerWidthPx: DRAWER_WIDTH,
+  } = useSwipeDrawer({
+    drawerWidth: 0.8,
+    edgeThreshold: 20,
+    swipeThreshold: 50,
+  })
 
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${token}`,
@@ -118,25 +128,6 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
     isSaving: false,
     questionForAi: apiMsg.role === 'model' ? undefined : apiMsg.content,
   })
-
-  const openDrawer = () => {
-    setIsDrawerOpen(true)
-    Animated.timing(drawerAnim, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start()
-  }
-
-  const closeDrawer = () => {
-    Animated.timing(drawerAnim, {
-      toValue: -DRAWER_WIDTH,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
-      setIsDrawerOpen(false)
-    })
-  }
 
   const fetchSessions = async () => {
     if (!token) return
@@ -576,12 +567,13 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
   // Chat View
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: currentTheme.background }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        {/* Header */}
-        <View style={{
+      <View style={{ flex: 1 }} {...panHandlers}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          {/* Header */}
+          <View style={{
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -818,6 +810,7 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      </View>
 
       {/* Side Drawer */}
       {renderDrawer()}
