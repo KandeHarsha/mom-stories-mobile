@@ -2,7 +2,7 @@ import themes from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { Baby } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppointmentsTab from './AppointmentsTab';
@@ -13,10 +13,10 @@ import VaccinationTabNew from './VaccinationTabNew';
 type TabType = 'growth' | 'vaccinations' | 'wellness' | 'appointments';
 
 const allTabs = [
-  { id: 'growth' as TabType, label: 'Baby Growth', icon: Baby, requiresPostPregnancy: true },
-  { id: 'vaccinations' as TabType, label: 'Vaccinations', icon: Baby, requiresPostPregnancy: true },
-  { id: 'wellness' as TabType, label: 'Mom Wellness', icon: Baby, requiresPostPregnancy: false },
-  { id: 'appointments' as TabType, label: 'Appointments', icon: Baby, requiresPostPregnancy: false },
+  { id: 'growth' as TabType, label: 'Baby Growth', icon: Baby },
+  { id: 'vaccinations' as TabType, label: 'Vaccinations', icon: Baby },
+  { id: 'wellness' as TabType, label: 'Mom Wellness', icon: Baby },
+  { id: 'appointments' as TabType, label: 'Appointments', icon: Baby },
 ];
 
 export default function HealthTrackerView() {
@@ -26,11 +26,8 @@ export default function HealthTrackerView() {
   const screenWidth = Dimensions.get('window').width;
   const isTablet = screenWidth > 768;
 
-  // Filter tabs based on user phase
-  const tabs = useMemo(() => {
-    const isPostPregnancy = user?.phase === 'post_pregnancy';
-    return allTabs.filter(tab => !tab.requiresPostPregnancy || isPostPregnancy);
-  }, [user?.phase]);
+  // All tabs are available to all users regardless of phase
+  const tabs = allTabs;
 
   // Set initial active tab based on available tabs
   const [activeTab, setActiveTab] = useState<TabType>(tabs[0]?.id || 'wellness');
@@ -69,9 +66,7 @@ export default function HealthTrackerView() {
           <View style={styles.headerText}>
             <Text style={styles.title}>Growth & Health Tools</Text>
             <Text style={styles.subtitle}>
-              {user?.phase === 'post_pregnancy' 
-                ? 'Keep track of important milestones and health data for you and your baby.'
-                : 'Track your appointments and wellness during pregnancy.'}
+              Keep track of important milestones, health data, appointments, and wellness.
             </Text>
           </View>
         </View>
