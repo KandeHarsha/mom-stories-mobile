@@ -571,6 +571,7 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 50 : 0}
         >
           {/* Header */}
           <View style={{

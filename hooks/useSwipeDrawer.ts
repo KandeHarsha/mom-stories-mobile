@@ -1,5 +1,5 @@
-import { useRef, useState, useCallback, useMemo } from 'react'
-import { Animated, Dimensions, PanResponder, PanResponderGestureState, GestureResponderEvent } from 'react-native'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { Animated, Dimensions, GestureResponderEvent, PanResponder, PanResponderGestureState } from 'react-native'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
