@@ -226,6 +226,11 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
       
       // Refresh sessions list to show updated title/timestamp
       fetchSessions()
+      
+      // Refetch session messages to sync with actual message IDs from backend
+      if (data.sessionId) {
+        await fetchSessionMessages(data.sessionId)
+      }
     } catch (error) {
       console.error('Error sending message:', error)
       Alert.alert('Error', `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -235,7 +240,7 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
   }
 
   const saveResponse = async (message: Message) => {
-    if (!token || !message.questionForAi) return
+    if (!token) return
 
     // Update message to show saving state
     setMessages(prev => prev.map(msg =>
@@ -243,19 +248,11 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
     ))
 
     try {
-      const formData = new FormData()
-      formData.append('title', `AI: ${message.questionForAi}`)
-      formData.append('text', message.text)
-      formData.append('isAiResponse', 'true')
-
-      const response = await fetch(`${API_BASE_URL}/memories`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData
+      const response = await fetch(`${API_BASE_URL}/ai-support/message/${message.id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ isSaved: true })
       })
-
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -364,6 +361,11 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
           }
 
           setMessages(prev => [...prev, aiMessage])
+          
+          // Refetch session messages to sync with actual message IDs from backend
+          if (data.sessionId) {
+            await fetchSessionMessages(data.sessionId)
+          }
         } catch (error) {
           console.error('Error sending message:', error)
           Alert.alert('Error', `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`)
