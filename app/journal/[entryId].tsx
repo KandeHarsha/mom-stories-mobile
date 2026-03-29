@@ -1,13 +1,16 @@
 import themes from '@/constants/colors'
+import { DEFAULT_CATEGORY, getCategoryConfig, JOURNAL_CATEGORIES, JournalCategory, PREDEFINED_TAGS } from '@/constants/journalCategories'
 import { useAuth } from '@/context/AuthContext'
 import { Audio } from 'expo-av'
 import { router, useLocalSearchParams } from 'expo-router'
-import { ArrowLeft, Edit3, ImageIcon, Play, StopCircle, Trash2 } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronDown, Edit3, ImageIcon, Play, StopCircle, Trash2, X } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useMemo, useState } from 'react'
 import {
     Alert,
     Image,
+    KeyboardAvoidingView,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -25,11 +28,13 @@ interface JournalEntry {
     content: string
     imageUri?: string
     audioUri?: string
+    category?: string
+    tags?: string[]
     createdAt: string // Changed from Date to string since API returns formatted string
 }
 
 // API functions
-const updateJournalEntry = async (entryId: string, updates: { title: string; content: string }, token: string): Promise<JournalEntry> => {
+const updateJournalEntry = async (entryId: string, updates: { title: string; content: string; category?: string; tags?: string[] }, token: string): Promise<JournalEntry> => {
     try {
         const response = await fetch(`${API_BASE_URL}/journal/${entryId}`, {
             method: 'PUT',
@@ -48,7 +53,9 @@ const updateJournalEntry = async (entryId: string, updates: { title: string; con
 
         return {
             ...data,
-            createdAt: data.createdAt || data.created_at || 'Unknown date'
+            createdAt: data.createdAt || data.created_at || 'Unknown date',
+            category: data.category || 'General',
+            tags: data.tags || []
         }
     } catch (error) {
         throw error
@@ -80,6 +87,8 @@ const JournalEntryEdit = () => {
         content: string
         imageUri?: string
         audioUri?: string
+        category?: string
+        tags?: string
         createdAt: string
     }>()
 
@@ -90,6 +99,10 @@ const JournalEntryEdit = () => {
 
     const [title, setTitle] = useState('')
     const [content, setContent] = useState('')
+    const [selectedCategory, setSelectedCategory] = useState<JournalCategory>(DEFAULT_CATEGORY)
+    const [selectedTags, setSelectedTags] = useState<string[]>([])
+    const [customTag, setCustomTag] = useState('')
+    const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
     const [entry, setEntry] = useState<JournalEntry | null>(null)
@@ -111,6 +124,16 @@ const JournalEntryEdit = () => {
     const entryData = useMemo(() => {
         if (params.entryId && params.title && params.content) {
 
+            // Parse tags from JSON string
+            let parsedTags: string[] = []
+            if (params.tags) {
+                try {
+                    parsedTags = JSON.parse(params.tags)
+                } catch (error) {
+                    console.error('Failed to parse tags:', error)
+                    parsedTags = []
+                }
+            }
 
             return {
                 id: params.entryId,
@@ -118,11 +141,13 @@ const JournalEntryEdit = () => {
                 content: params.content,
                 imageUri: params.imageUri && params.imageUri.trim() !== '' ? params.imageUri : undefined,
                 audioUri: params.audioUri && params.audioUri.trim() !== '' ? params.audioUri : undefined,
+                category: params.category || 'General',
+                tags: parsedTags,
                 createdAt: params.createdAt || 'Unknown date'
             }
         }
         return null
-    }, [params.entryId, params.title, params.content, params.imageUri, params.audioUri, params.createdAt])
+    }, [params.entryId, params.title, params.content, params.imageUri, params.audioUri, params.category, params.tags, params.createdAt])
 
     useEffect(() => {
         if (entryData) {
@@ -130,6 +155,8 @@ const JournalEntryEdit = () => {
             setEntry(entryData)
             setTitle(entryData.title)
             setContent(entryData.content)
+            setSelectedCategory(entryData.category as JournalCategory || DEFAULT_CATEGORY)
+            setSelectedTags(entryData.tags || [])
         } else if (params.entryId) {
             // If no params, go back (shouldn't happen in normal flow)
             Alert.alert('Error', 'Entry data not found', [
@@ -172,8 +199,34 @@ const JournalEntryEdit = () => {
         if (entryData) {
             setTitle(entryData.title)
             setContent(entryData.content)
+            setSelectedCategory(entryData.category as JournalCategory || DEFAULT_CATEGORY)
+            setSelectedTags(entryData.tags || [])
         }
+        setCustomTag('')
         setIsEditing(false)
+    }
+
+    // Tag handling functions
+    const togglePredefinedTag = (tag: string) => {
+        setSelectedTags(prev =>
+            prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+        )
+    }
+
+    const addCustomTag = () => {
+        const trimmedTag = customTag.trim()
+        if (trimmedTag && trimmedTag.length <= 20 && !selectedTags.includes(trimmedTag)) {
+            setSelectedTags(prev => [...prev, trimmedTag])
+            setCustomTag('')
+        } else if (selectedTags.includes(trimmedTag)) {
+            Alert.alert('Duplicate Tag', 'This tag has already been added')
+        } else if (trimmedTag.length > 20) {
+            Alert.alert('Tag Too Long', 'Tags must be 20 characters or less')
+        }
+    }
+
+    const removeTag = (tag: string) => {
+        setSelectedTags(prev => prev.filter(t => t !== tag))
     }
 
     const handleSave = async () => {
@@ -193,9 +246,23 @@ const JournalEntryEdit = () => {
             const updates = {
                 title: title.trim(),
                 content: content.trim(),
+                category: selectedCategory,
+                tags: selectedTags,
             }
 
             await updateJournalEntry(params.entryId, updates, token)
+            
+            // Update the entry state with new values
+            if (entryData) {
+                setEntry({
+                    ...entryData,
+                    title: title.trim(),
+                    content: content.trim(),
+                    category: selectedCategory,
+                    tags: selectedTags,
+                })
+            }
+            
             setIsEditing(false)
             Alert.alert('Success', 'Journal entry updated!')
         } catch (error) {
@@ -365,18 +432,23 @@ const JournalEntryEdit = () => {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView
-                style={styles.content}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={{ paddingBottom: 20 }}
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={100}
             >
-                {/* Entry Info */}
-                <View style={styles.entryInfo}>
-                    <Text style={styles.entryDate}>
-                        Created: {entry.createdAt || 'Date unavailable'}
-                    </Text>
-                </View>
+                <ScrollView
+                    style={styles.content}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ paddingBottom: 20 }}
+                >
+                    {/* Entry Info */}
+                    <View style={styles.entryInfo}>
+                        <Text style={styles.entryDate}>
+                            Created: {entry.createdAt || 'Date unavailable'}
+                        </Text>
+                    </View>
 
                 {/* Photo Display */}
                 {entry.imageUri && (
@@ -522,6 +594,139 @@ const JournalEntryEdit = () => {
                             />
                         </View>
 
+                        {/* Category Selector */}
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Category</Text>
+                            <TouchableOpacity
+                                style={styles.dropdownButton}
+                                onPress={() => !isSaving && setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                                disabled={isSaving}
+                            >
+                                {(() => {
+                                    const selectedConfig = JOURNAL_CATEGORIES.find(c => c.value === selectedCategory) || JOURNAL_CATEGORIES[0]
+                                    const SelectedIcon = selectedConfig.icon
+                                    return (
+                                        <>
+                                            <View style={styles.dropdownButtonContent}>
+                                                <SelectedIcon size={18} color={selectedConfig.color} />
+                                                <Text style={[styles.dropdownButtonText, { color: selectedConfig.color }]}>
+                                                    {selectedConfig.label}
+                                                </Text>
+                                            </View>
+                                            <ChevronDown size={20} color={currentTheme.mutedForeground} />
+                                        </>
+                                    )
+                                })()}
+                            </TouchableOpacity>
+                            
+                            {isCategoryDropdownOpen && !isSaving && (
+                                <ScrollView style={styles.dropdownMenu} nestedScrollEnabled={true}>
+                                    {JOURNAL_CATEGORIES.map((category) => {
+                                        const Icon = category.icon
+                                        const isSelected = selectedCategory === category.value
+                                        return (
+                                            <TouchableOpacity
+                                                key={category.value}
+                                                style={[
+                                                    styles.dropdownItem,
+                                                    isSelected && styles.dropdownItemSelected
+                                                ]}
+                                                onPress={() => {
+                                                    setSelectedCategory(category.value)
+                                                    setIsCategoryDropdownOpen(false)
+                                                }}
+                                            >
+                                                <Icon size={18} color={category.color} />
+                                                <Text style={[styles.dropdownItemText, { color: category.color }]}>
+                                                    {category.label}
+                                                </Text>
+                                                {isSelected && <Check size={16} color={category.color} />}
+                                            </TouchableOpacity>
+                                        )
+                                    })}
+                                </ScrollView>
+                            )}
+                        </View>
+
+                        {/* Tag Selector */}
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Tags (optional)</Text>
+                            
+                            {/* Predefined Tags */}
+                            <Text style={styles.subLabel}>Quick tags</Text>
+                            <View style={styles.tagsContainer}>
+                                {PREDEFINED_TAGS.map((tag) => {
+                                    const isSelected = selectedTags.includes(tag)
+                                    return (
+                                        <TouchableOpacity
+                                            key={tag}
+                                            style={[
+                                                styles.tagChip,
+                                                isSelected && styles.tagChipSelected
+                                            ]}
+                                            onPress={() => togglePredefinedTag(tag)}
+                                            disabled={isSaving}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.tagChipText,
+                                                    isSelected && styles.tagChipTextSelected
+                                                ]}
+                                            >
+                                                {tag}
+                                            </Text>
+                                            {isSelected && <Check size={12} color="white" />}
+                                        </TouchableOpacity>
+                                    )
+                                })}
+                            </View>
+
+                            {/* Custom Tag Input */}
+                            <Text style={[styles.subLabel, { marginTop: 12 }]}>Add custom tag</Text>
+                            <View style={styles.customTagContainer}>
+                                <TextInput
+                                    style={styles.customTagInput}
+                                    placeholder="Type a custom tag..."
+                                    value={customTag}
+                                    onChangeText={setCustomTag}
+                                    placeholderTextColor={currentTheme.mutedForeground}
+                                    maxLength={20}
+                                    onSubmitEditing={addCustomTag}
+                                    returnKeyType="done"
+                                    editable={!isSaving}
+                                />
+                                <TouchableOpacity
+                                    style={[styles.addTagButton, (!customTag.trim() || isSaving) && styles.addTagButtonDisabled]}
+                                    onPress={addCustomTag}
+                                    disabled={!customTag.trim() || isSaving}
+                                >
+                                    <Text style={styles.addTagButtonText}>Add</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Selected Tags Display */}
+                            {selectedTags.length > 0 && (
+                                <>
+                                    <Text style={[styles.subLabel, { marginTop: 12 }]}>
+                                        Selected tags ({selectedTags.length})
+                                    </Text>
+                                    <View style={styles.tagsContainer}>
+                                        {selectedTags.map((tag) => (
+                                            <View
+                                                key={tag}
+                                                style={styles.selectedTag}
+                                            >
+                                                <Text style={styles.selectedTagText}>{tag}</Text>
+                                                <TouchableOpacity onPress={() => removeTag(tag)} disabled={isSaving}>
+                                                    <X size={14} color="white" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </>
+                            )}
+                        </View>
+
                         {/* Edit Action Buttons */}
                         <View style={styles.editActions}>
                             <TouchableOpacity
@@ -562,6 +767,44 @@ const JournalEntryEdit = () => {
                             </View>
                         </View>
 
+                        {/* Read-only Category */}
+                        <View style={styles.readOnlySection}>
+                            <Text style={styles.label}>Category</Text>
+                            <View style={styles.readOnlyContainer}>
+                                {(() => {
+                                    const categoryConfig = getCategoryConfig(selectedCategory)
+                                    const CategoryIcon = categoryConfig.icon
+                                    return (
+                                        <View style={[
+                                            styles.categoryBadge,
+                                            { backgroundColor: categoryConfig.lightColor }
+                                        ]}>
+                                            <CategoryIcon size={14} color={categoryConfig.color} />
+                                            <Text style={[styles.categoryBadgeText, { color: categoryConfig.color }]}>
+                                                {categoryConfig.label}
+                                            </Text>
+                                        </View>
+                                    )
+                                })()}
+                            </View>
+                        </View>
+
+                        {/* Read-only Tags */}
+                        {selectedTags.length > 0 && (
+                            <View style={styles.readOnlySection}>
+                                <Text style={styles.label}>Tags</Text>
+                                <View style={styles.readOnlyContainer}>
+                                    <View style={styles.tagsContainer}>
+                                        {selectedTags.map((tag) => (
+                                            <View key={tag} style={styles.selectedTag}>
+                                                <Text style={styles.selectedTagText}>{tag}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+
                         {/* Edit Button */}
                         <TouchableOpacity
                             onPress={handleEdit}
@@ -573,6 +816,7 @@ const JournalEntryEdit = () => {
                     </>
                 )}
             </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     )
 }
@@ -817,5 +1061,146 @@ const createStyles = (theme: any) => StyleSheet.create({
         fontSize: 16,
         marginTop: 8,
         textAlign: 'center',
+    },
+    categoriesContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    dropdownButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: theme.border,
+        borderRadius: 8,
+        backgroundColor: theme.card,
+    },
+    dropdownButtonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    dropdownButtonText: {
+        fontSize: 16,
+        fontWeight: '500',
+    },
+    dropdownMenu: {
+        marginTop: 8,
+        borderWidth: 1,
+        borderColor: theme.border,
+        borderRadius: 8,
+        backgroundColor: theme.card,
+        maxHeight: 300,
+    },
+    dropdownItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        gap: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.border,
+    },
+    dropdownItemSelected: {
+        backgroundColor: theme.muted,
+    },
+    dropdownItemText: {
+        flex: 1,
+        fontSize: 15,
+        fontWeight: '500',
+    },
+    categoryBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        gap: 4,
+    },
+    categoryBadgeText: {
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    subLabel: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: theme.mutedForeground,
+        marginBottom: 8,
+    },
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    tagChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.muted,
+        gap: 4,
+    },
+    tagChipSelected: {
+        backgroundColor: theme.primary,
+        borderColor: theme.primary,
+    },
+    tagChipText: {
+        fontSize: 13,
+        color: theme.foreground,
+    },
+    tagChipTextSelected: {
+        color: theme.primaryForeground,
+    },
+    customTagContainer: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    customTagInput: {
+        flex: 1,
+        borderWidth: 1,
+        borderColor: theme.border,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 14,
+        backgroundColor: theme.card,
+        color: theme.cardForeground,
+    },
+    addTagButton: {
+        backgroundColor: theme.primary,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    addTagButtonDisabled: {
+        backgroundColor: theme.muted,
+        opacity: 0.5,
+    },
+    addTagButtonText: {
+        color: theme.primaryForeground,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    selectedTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 16,
+        backgroundColor: theme.primary,
+        gap: 6,
+    },
+    selectedTagText: {
+        fontSize: 13,
+        color: theme.primaryForeground,
     },
 })
