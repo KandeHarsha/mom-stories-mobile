@@ -3,7 +3,7 @@ import { WHO_LENGTH_CM_RANGES, WHO_WEIGHT_KG_RANGES } from '@/constants/growthDa
 import { useAuth } from '@/context/AuthContext';
 import { useNotification } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
-import { Baby, BookHeart, Calendar, CalendarIcon, Heart, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
+import { Baby, BookHeart, Calendar, CalendarIcon, Heart, Pill, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import {
@@ -407,6 +407,25 @@ export default function Home() {
               Monitor your baby's growth
             </Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Medication Reminders Card */}
+        <View style={styles.featuresRow}>
+          <TouchableOpacity
+            style={styles.featureCardSmall}
+            onPress={() => router.push('/medications')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.featureIconContainerSmall}>
+              <Pill size={28} color={currentTheme.primary} />
+            </View>
+            <Text style={styles.featureTitleSmall}>Medication Reminders</Text>
+            <Text style={styles.featureDescriptionSmall}>
+              Track your medications and dosages
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.featureCardSmall} />
         </View>
       </ScrollView>
 
