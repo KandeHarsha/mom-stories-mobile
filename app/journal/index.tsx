@@ -1,15 +1,18 @@
 import themes from '@/constants/colors'
+import { DEFAULT_CATEGORY, JOURNAL_CATEGORIES, JournalCategory, PREDEFINED_TAGS } from '@/constants/journalCategories'
 import { useAuth } from '@/context/AuthContext'
 import { Audio } from 'expo-av'
 import * as ImagePicker from 'expo-image-picker'
 import { router } from 'expo-router'
-import { BookOpen, ChevronRight, ImageIcon, Mic, PlusCircle, RefreshCw, StopCircle, X } from 'lucide-react-native'
+import { BookOpen, Check, ChevronDown, ChevronRight, ImageIcon, Mic, Plus, RefreshCw, StopCircle, X } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useRef, useState } from 'react'
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,6 +30,8 @@ interface JournalEntry {
   content: string
   imageUri?: string
   audioUri?: string
+  category?: string
+  tags?: string[]
   createdAt: string // Changed from Date to string since API returns formatted string
 }
 
@@ -61,7 +66,9 @@ const fetchJournalEntries = async (token: string): Promise<JournalEntry[]> => {
         ...entry,
         createdAt: entry.createdAt || entry.created_at || 'Unknown date', // Keep as string
         imageUri,
-        audioUri
+        audioUri,
+        category: entry.category || 'General',
+        tags: entry.tags || []
       }
     })
   } catch (error) {
@@ -74,6 +81,14 @@ const createJournalEntry = async (entry: Omit<JournalEntry, 'id' | 'createdAt'>,
     const formData = new FormData()
     formData.append('title', entry.title)
     formData.append('content', entry.content)
+    
+    // Add category and tags
+    if (entry.category) {
+      formData.append('category', entry.category)
+    }
+    if (entry.tags && entry.tags.length > 0) {
+      formData.append('tags', JSON.stringify(entry.tags))
+    }
 
     // Handle image upload
     if (entry.imageUri) {
@@ -126,6 +141,11 @@ const PrivateJournalScreen = () => {
   const [content, setContent] = useState('')
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null)
   const [audioUri, setAudioUri] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<JournalCategory>(DEFAULT_CATEGORY)
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [customTag, setCustomTag] = useState('')
+  const [activeFilter, setActiveFilter] = useState<JournalCategory | 'All'>('All')
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false)
   const [entries, setEntries] = useState<JournalEntry[]>([])
 
   const recordingRef = useRef<Audio.Recording | null>(null)
@@ -161,6 +181,9 @@ const PrivateJournalScreen = () => {
     setContent('')
     setSelectedImageUri(null)
     setAudioUri(null)
+    setSelectedCategory(DEFAULT_CATEGORY)
+    setSelectedTags([])
+    setCustomTag('')
   }
 
   const handleSave = async () => {
@@ -182,6 +205,8 @@ const PrivateJournalScreen = () => {
         content: content.trim(),
         imageUri: selectedImageUri || undefined,
         audioUri: audioUri || undefined,
+        category: selectedCategory,
+        tags: selectedTags,
       }
 
       const newEntry = await createJournalEntry(entryData, token)
@@ -263,6 +288,34 @@ const PrivateJournalScreen = () => {
   const removeImage = () => setSelectedImageUri(null)
   const removeAudio = () => setAudioUri(null)
 
+  // Tag handling functions
+  const togglePredefinedTag = (tag: string) => {
+    setSelectedTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    )
+  }
+
+  const addCustomTag = () => {
+    const trimmedTag = customTag.trim()
+    if (trimmedTag && trimmedTag.length <= 20 && !selectedTags.includes(trimmedTag)) {
+      setSelectedTags(prev => [...prev, trimmedTag])
+      setCustomTag('')
+    } else if (selectedTags.includes(trimmedTag)) {
+      Alert.alert('Duplicate Tag', 'This tag has already been added')
+    } else if (trimmedTag.length > 20) {
+      Alert.alert('Tag Too Long', 'Tags must be 20 characters or less')
+    }
+  }
+
+  const removeTag = (tag: string) => {
+    setSelectedTags(prev => prev.filter(t => t !== tag))
+  }
+
+  // Filter entries by active category
+  const filteredEntries = activeFilter === 'All' 
+    ? entries 
+    : entries.filter(entry => entry.category === activeFilter)
+
   const styles = createStyles(currentTheme)
 
   return (
@@ -270,18 +323,62 @@ const PrivateJournalScreen = () => {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Your Private Journal</Text>
-            <Text style={styles.subtitle}>A safe space to capture every moment, thought, and feeling.</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.newEntryButton}
-            onPress={() => setIsNewEntryOpen(true)}
-          >
-            <PlusCircle size={24} color={currentTheme.primaryForeground} />
-            <Text style={styles.newEntryButtonText}>New Entry</Text>
-          </TouchableOpacity>
+          <Text style={styles.title}>Your Private Journal</Text>
+          <Text style={styles.subtitle}>A safe space to capture every moment, thought, and feeling.</Text>
         </View>
+
+        {/* Category Filter Chips */}
+        {!isLoading && entries.length > 0 && (
+          <View style={styles.filterSection}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterChipsContainer}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.filterChip,
+                  activeFilter === 'All' && styles.filterChipActive
+                ]}
+                onPress={() => setActiveFilter('All')}
+              >
+                <Text style={[
+                  styles.filterChipText,
+                  activeFilter === 'All' && styles.filterChipTextActive
+                ]}>
+                  All
+                </Text>
+              </TouchableOpacity>
+              
+              {JOURNAL_CATEGORIES.map((category) => {
+                const Icon = category.icon
+                const isActive = activeFilter === category.value
+                return (
+                  <TouchableOpacity
+                    key={category.value}
+                    style={[
+                      styles.filterChip,
+                      { borderColor: category.color },
+                      isActive && { backgroundColor: category.color }
+                    ]}
+                    onPress={() => setActiveFilter(category.value)}
+                  >
+                    <Icon 
+                      size={14} 
+                      color={isActive ? 'white' : category.color} 
+                    />
+                    <Text style={[
+                      styles.filterChipText,
+                      { color: isActive ? 'white' : category.color }
+                    ]}>
+                      {category.label}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Journal Entries */}
         <View style={styles.entriesContainer}>
@@ -294,10 +391,20 @@ const PrivateJournalScreen = () => {
             <View style={styles.emptyState}>
               <BookOpen size={64} color={currentTheme.mutedForeground} />
               <Text style={styles.emptyStateText}>No entries yet</Text>
-              <Text style={styles.emptyStateSubtext}>Tap "New Entry" to start journaling</Text>
+              <Text style={styles.emptyStateSubtext}>Tap the + button to start journaling</Text>
+            </View>
+          ) : filteredEntries.length === 0 ? (
+            <View style={styles.emptyState}>
+              <BookOpen size={64} color={currentTheme.mutedForeground} />
+              <Text style={styles.emptyStateText}>No entries in this category</Text>
+              <Text style={styles.emptyStateSubtext}>Try selecting a different filter</Text>
             </View>
           ) : (
-            entries.map((entry) => (
+            filteredEntries.map((entry) => {
+              const categoryConfig = JOURNAL_CATEGORIES.find(c => c.value === entry.category) || JOURNAL_CATEGORIES[0]
+              const CategoryIcon = categoryConfig.icon
+              
+              return (
               <TouchableOpacity
                 key={entry.id}
                 style={styles.entryCard}
@@ -309,6 +416,8 @@ const PrivateJournalScreen = () => {
                     content: entry.content,
                     imageUri: entry.imageUri || '',
                     audioUri: entry.audioUri || '',
+                    category: entry.category || 'General',
+                    tags: JSON.stringify(entry.tags || []),
                     createdAt: entry.createdAt
                   }
                 })}
@@ -316,19 +425,44 @@ const PrivateJournalScreen = () => {
               >
                 <View style={styles.entryHeader}>
                   <Text style={styles.entryTitle}>{entry.title}</Text>
-                  <View style={styles.mediaIndicators}>
+                  <View style={[
+                    styles.categoryBadge,
+                    { backgroundColor: categoryConfig.lightColor }
+                  ]}>
+                    <CategoryIcon size={12} color={categoryConfig.color} />
+                    <Text style={[styles.categoryBadgeText, { color: categoryConfig.color }]}>
+                      {categoryConfig.label}
+                    </Text>
+                  </View>
+                </View>
+                
+                {/* Media Indicators */}
+                {(entry.imageUri || entry.audioUri) && (
+                  <View style={styles.mediaIndicatorsRow}>
                     {entry.imageUri && (
                       <View style={styles.mediaIndicator}>
-                        <ImageIcon size={16} color={currentTheme.primary} />
+                        <ImageIcon size={14} color={currentTheme.primary} />
                       </View>
                     )}
                     {entry.audioUri && (
                       <View style={styles.mediaIndicator}>
-                        <Mic size={16} color={currentTheme.primary} />
+                        <Mic size={14} color={currentTheme.primary} />
                       </View>
                     )}
                   </View>
-                </View>
+                )}
+                
+                {/* Tags */}
+                {entry.tags && entry.tags.length > 0 && (
+                  <View style={styles.entryTagsContainer}>
+                    {entry.tags.map((tag, index) => (
+                      <View key={index} style={styles.entryTagChip}>
+                        <Text style={styles.entryTagText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                
                 <Text style={styles.entryContent} numberOfLines={3}>{entry.content}</Text>
                 <View style={styles.entryFooter}>
                   <Text style={styles.entryDate}>
@@ -339,7 +473,8 @@ const PrivateJournalScreen = () => {
                   </View>
                 </View>
               </TouchableOpacity>
-            ))
+            )
+            })
           )}
         </View>
       </ScrollView>
@@ -370,8 +505,66 @@ const PrivateJournalScreen = () => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            <Text style={styles.modalSubtitle}>What's on your mind and in your heart today?</Text>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={120}
+          >
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalSubtitle}>What's on your mind and in your heart today?</Text>
+
+            {/* Category Dropdown */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Category</Text>
+              <TouchableOpacity
+                style={styles.dropdownButton}
+                onPress={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+              >
+                {(() => {
+                  const selectedConfig = JOURNAL_CATEGORIES.find(c => c.value === selectedCategory) || JOURNAL_CATEGORIES[0]
+                  const SelectedIcon = selectedConfig.icon
+                  return (
+                    <>
+                      <View style={styles.dropdownButtonContent}>
+                        <SelectedIcon size={18} color={selectedConfig.color} />
+                        <Text style={[styles.dropdownButtonText, { color: selectedConfig.color }]}>
+                          {selectedConfig.label}
+                        </Text>
+                      </View>
+                      <ChevronDown size={20} color={currentTheme.mutedForeground} />
+                    </>
+                  )
+                })()}
+              </TouchableOpacity>
+              
+              {isCategoryDropdownOpen && (
+                <ScrollView style={styles.dropdownMenu} nestedScrollEnabled={true}>
+                  {JOURNAL_CATEGORIES.map((category) => {
+                    const Icon = category.icon
+                    const isSelected = selectedCategory === category.value
+                    return (
+                      <TouchableOpacity
+                        key={category.value}
+                        style={[
+                          styles.dropdownItem,
+                          isSelected && styles.dropdownItemSelected
+                        ]}
+                        onPress={() => {
+                          setSelectedCategory(category.value)
+                          setIsCategoryDropdownOpen(false)
+                        }}
+                      >
+                        <Icon size={18} color={category.color} />
+                        <Text style={[styles.dropdownItemText, { color: category.color }]}>
+                          {category.label}
+                        </Text>
+                        {isSelected && <Check size={16} color={category.color} />}
+                      </TouchableOpacity>
+                    )
+                  })}
+                </ScrollView>
+              )}
+            </View>
 
             {/* Title Input */}
             <View style={styles.inputGroup}>
@@ -397,6 +590,83 @@ const PrivateJournalScreen = () => {
                 textAlignVertical="top"
                 placeholderTextColor="#999"
               />
+            </View>
+
+            {/* Tag Selector */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Tags (optional)</Text>
+              
+              {/* Predefined Tags */}
+              <Text style={styles.subLabel}>Quick tags</Text>
+              <View style={styles.tagsContainer}>
+                {PREDEFINED_TAGS.map((tag) => {
+                  const isSelected = selectedTags.includes(tag)
+                  return (
+                    <TouchableOpacity
+                      key={tag}
+                      style={[
+                        styles.tagChip,
+                        isSelected && styles.tagChipSelected
+                      ]}
+                      onPress={() => togglePredefinedTag(tag)}
+                    >
+                      <Text
+                        style={[
+                          styles.tagChipText,
+                          isSelected && styles.tagChipTextSelected
+                        ]}
+                      >
+                        {tag}
+                      </Text>
+                      {isSelected && <Check size={12} color="white" />}
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+
+              {/* Custom Tag Input */}
+              <Text style={[styles.subLabel, { marginTop: 12 }]}>Add custom tag</Text>
+              <View style={styles.customTagContainer}>
+                <TextInput
+                  style={styles.customTagInput}
+                  placeholder="Type a custom tag..."
+                  value={customTag}
+                  onChangeText={setCustomTag}
+                  placeholderTextColor="#999"
+                  maxLength={20}
+                  onSubmitEditing={addCustomTag}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity
+                  style={[styles.addTagButton, !customTag.trim() && styles.addTagButtonDisabled]}
+                  onPress={addCustomTag}
+                  disabled={!customTag.trim()}
+                >
+                  <Text style={styles.addTagButtonText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Selected Tags Display */}
+              {selectedTags.length > 0 && (
+                <>
+                  <Text style={[styles.subLabel, { marginTop: 12 }]}>
+                    Selected tags ({selectedTags.length})
+                  </Text>
+                  <View style={styles.tagsContainer}>
+                    {selectedTags.map((tag) => (
+                      <View
+                        key={tag}
+                        style={styles.selectedTag}
+                      >
+                        <Text style={styles.selectedTagText}>{tag}</Text>
+                        <TouchableOpacity onPress={() => removeTag(tag)}>
+                          <X size={14} color="white" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
             </View>
 
             {/* Media Buttons */}
@@ -450,8 +720,18 @@ const PrivateJournalScreen = () => {
               </View>
             )}
           </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setIsNewEntryOpen(true)}
+        activeOpacity={0.8}
+      >
+        <Plus size={32} strokeWidth={3} color={currentTheme.primaryForeground} />
+      </TouchableOpacity>
     </SafeAreaView>
   )
 }
@@ -482,22 +762,56 @@ const createStyles = (theme: any) => StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: theme.mutedForeground,
-    marginBottom: 20,
   },
-  newEntryButton: {
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: theme.primary,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+  },
+  filterSection: {
+    marginBottom: 16,
+  },
+  filterChipsContainer: {
     paddingHorizontal: 20,
-    borderRadius: 8,
     gap: 8,
   },
-  newEntryButtonText: {
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: theme.border,
+    backgroundColor: theme.background,
+    gap: 6,
+    marginRight: 8,
+  },
+  filterChipActive: {
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.foreground,
+  },
+  filterChipTextActive: {
     color: theme.primaryForeground,
-    fontSize: 16,
-    fontWeight: '600',
   },
   entriesContainer: {
     paddingBottom: 20,
@@ -545,16 +859,48 @@ const createStyles = (theme: any) => StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
-  mediaIndicators: {
+  mediaIndicatorsRow: {
     flexDirection: 'row',
     gap: 6,
+    marginBottom: 8,
   },
   mediaIndicator: {
     backgroundColor: theme.muted,
     borderRadius: 16,
-    padding: 6,
+    padding: 5,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    gap: 4,
+  },
+  categoryBadgeText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  entryTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  entryTagChip: {
+    backgroundColor: theme.muted,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  entryTagText: {
+    fontSize: 11,
+    color: theme.mutedForeground,
+    fontWeight: '500',
   },
   entryContent: {
     fontSize: 14,
@@ -727,5 +1073,133 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   removeAudioButton: {
     padding: 4,
+  },
+  categoriesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    backgroundColor: theme.card,
+  },
+  dropdownButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  dropdownButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  dropdownMenu: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    backgroundColor: theme.card,
+    maxHeight: 300,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  dropdownItemSelected: {
+    backgroundColor: theme.muted,
+  },
+  dropdownItemText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  subLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.mutedForeground,
+    marginBottom: 8,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.muted,
+    gap: 4,
+  },
+  tagChipSelected: {
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
+  },
+  tagChipText: {
+    fontSize: 13,
+    color: theme.foreground,
+  },
+  tagChipTextSelected: {
+    color: theme.primaryForeground,
+  },
+  customTagContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  customTagInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    backgroundColor: theme.card,
+    color: theme.cardForeground,
+  },
+  addTagButton: {
+    backgroundColor: theme.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addTagButtonDisabled: {
+    backgroundColor: theme.muted,
+    opacity: 0.5,
+  },
+  addTagButtonText: {
+    color: theme.primaryForeground,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  selectedTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: theme.primary,
+    gap: 6,
+  },
+  selectedTagText: {
+    fontSize: 13,
+    color: theme.primaryForeground,
   },
 })
