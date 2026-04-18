@@ -1,29 +1,43 @@
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export type MedicationType = 'tablet' | 'tonic' | 'powder' | 'drops';
+export type MedicationFrequency = 'daily' | 'weekly';
+
+export interface ReminderTime {
+  hour: number;
+  minute: number;
+}
 
 export interface Medication {
   id: string;
   userId: string;
   title: string;
-  frequency: string;
+  frequency: MedicationFrequency;
+  reminderTime: ReminderTime;
+  weekday?: number; // 1=Sunday, 2=Monday, ..., 7=Saturday
   dosage: string;
   type: MedicationType;
+  notificationId?: string;
   createdAt: string;
 }
 
 export interface CreateMedicationPayload {
   title: string;
-  frequency: string;
+  frequency: MedicationFrequency;
+  reminderTime: ReminderTime;
+  weekday?: number;
   dosage: string;
   type: MedicationType;
 }
 
 export interface UpdateMedicationPayload {
   title?: string;
-  frequency?: string;
+  frequency?: MedicationFrequency;
+  reminderTime?: ReminderTime;
+  weekday?: number;
   dosage?: string;
   type?: MedicationType;
+  notificationId?: string;
 }
 
 /**

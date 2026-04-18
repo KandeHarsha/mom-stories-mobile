@@ -1,40 +1,80 @@
 import themes from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
+import { useNotification } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, ChevronDown, Edit2, Pill, Plus, Trash2, X } from 'lucide-react-native';
+import { ArrowLeft, ChevronDown, ChevronUp, Edit2, Pill, Plus, Trash2, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-    createMedication,
-    CreateMedicationPayload,
-    deleteMedication,
-    getMedications,
-    Medication,
-    MedicationType,
-    updateMedication,
-    UpdateMedicationPayload
+  createMedication,
+  CreateMedicationPayload,
+  deleteMedication,
+  getMedications,
+  Medication,
+  MedicationFrequency,
+  MedicationType,
+  updateMedication,
+  UpdateMedicationPayload
 } from '../services/medication-service';
+import {
+  createNotificationRegistry,
+  updateNotificationRegistryBySourceId,
+} from '../services/notification-registry-service';
+import {
+  cancelMedicationNotification,
+  getNextScheduledAt,
+  scheduleMedicationNotification,
+} from '../services/notification-scheduler';
 
 const MEDICATION_TYPES: MedicationType[] = ['tablet', 'tonic', 'powder', 'drops'];
+const MEDICATION_FREQUENCIES: { label: string; value: MedicationFrequency }[] = [
+  { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
+];
+const WEEKDAYS = [
+  { label: 'Sunday', value: 1 },
+  { label: 'Monday', value: 2 },
+  { label: 'Tuesday', value: 3 },
+  { label: 'Wednesday', value: 4 },
+  { label: 'Thursday', value: 5 },
+  { label: 'Friday', value: 6 },
+  { label: 'Saturday', value: 7 },
+];
+
+const formatTime = (hour: number, minute: number) => {
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const h = hour % 12 || 12;
+  const m = String(minute).padStart(2, '0');
+  return `${h}:${m} ${ampm}`;
+};
+
+const formatFrequency = (medication: Medication) => {
+  if (!medication.reminderTime) return medication.frequency === 'daily' ? 'Daily' : 'Weekly';
+  const time = formatTime(medication.reminderTime.hour, medication.reminderTime.minute);
+  if (medication.frequency === 'daily') return `Daily at ${time}`;
+  const day = WEEKDAYS.find((w) => w.value === medication.weekday)?.label ?? '';
+  return `Weekly (${day}) at ${time}`;
+};
 
 export default function MedicationsScreen() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
   const { session } = useAuth();
+  const { expoPushToken } = useNotification();
   const router = useRouter();
 
   const [medications, setMedications] = useState<Medication[]>([]);
@@ -47,10 +87,15 @@ export default function MedicationsScreen() {
 
   // Form states
   const [title, setTitle] = useState('');
-  const [frequency, setFrequency] = useState('');
   const [dosage, setDosage] = useState('');
   const [type, setType] = useState<MedicationType>('tablet');
+  const [frequency, setFrequency] = useState<MedicationFrequency>('daily');
+  const [reminderHour, setReminderHour] = useState(9);
+  const [reminderMinute, setReminderMinute] = useState(0);
+  const [weekday, setWeekday] = useState(2); // Monday default
   const [showTypePicker, setShowTypePicker] = useState(false);
+  const [showFrequencyPicker, setShowFrequencyPicker] = useState(false);
+  const [showWeekdayPicker, setShowWeekdayPicker] = useState(false);
 
   const styles = createStyles(currentTheme);
 
@@ -77,14 +122,18 @@ export default function MedicationsScreen() {
 
   const resetForm = () => {
     setTitle('');
-    setFrequency('');
     setDosage('');
     setType('tablet');
+    setFrequency('daily');
+    setReminderHour(9);
+    setReminderMinute(0);
+    setWeekday(2);
     setShowTypePicker(false);
+    setShowFrequencyPicker(false);
+    setShowWeekdayPicker(false);
   };
 
   const handleAddMedication = async () => {
-    // Validation
     if (!title.trim()) {
       Alert.alert('Error', 'Please enter medication name');
       return;
@@ -93,29 +142,65 @@ export default function MedicationsScreen() {
       Alert.alert('Error', 'Please enter dosage');
       return;
     }
-    if (!frequency.trim()) {
-      Alert.alert('Error', 'Please enter frequency');
-      return;
-    }
 
     setSubmitting(true);
     try {
+      const reminderTime = { hour: reminderHour, minute: reminderMinute };
       const payload: CreateMedicationPayload = {
         title: title.trim(),
-        frequency: frequency.trim(),
         dosage: dosage.trim(),
         type,
+        frequency,
+        reminderTime,
+        ...(frequency === 'weekly' ? { weekday } : {}),
       };
 
-      await createMedication(session!.accessToken, payload);
+      const { id: medicationId } = await createMedication(session!.accessToken, payload);
 
-      // Refresh list
+      // Schedule local notification
+      let notificationId: string | undefined;
+      try {
+        notificationId = await scheduleMedicationNotification({
+          medicationId,
+          title: title.trim(),
+          dosage: dosage.trim(),
+          frequency,
+          reminderTime,
+          weekday: frequency === 'weekly' ? weekday : undefined,
+        });
+
+        // Store notificationId on the medication
+        await updateMedication(session!.accessToken, medicationId, { notificationId });
+
+        // Post to notification registry
+        const scheduledAt = getNextScheduledAt(reminderHour, reminderMinute, frequency, frequency === 'weekly' ? weekday : undefined);
+        await createNotificationRegistry(session!.accessToken, {
+          expoNotificationId: notificationId,
+          sourceType: 'medicine',
+          sourceId: medicationId,
+          title: '💊 Medication Reminder',
+          body: frequency === 'daily'
+            ? `Time to take ${title.trim()} (${dosage.trim()})`
+            : `Weekly reminder: Take ${title.trim()} (${dosage.trim()})`,
+          data: { medicineId: medicationId, screen: 'MedicineDetail' },
+          trigger: {
+            hour: reminderHour,
+            minute: reminderMinute,
+            repeats: true,
+            ...(frequency === 'weekly' ? { weekday } : {}),
+          },
+          scheduledAt,
+          repeats: true,
+          status: 'active',
+          deviceId: expoPushToken ?? '',
+        });
+      } catch (notifErr) {
+        console.error('Notification scheduling failed (non-fatal):', notifErr);
+      }
+
       await fetchMedications();
-
-      // Reset form
       resetForm();
       setShowAddModal(false);
-
       Alert.alert('Success', 'Medication added successfully!');
     } catch (err) {
       console.error('Failed to add medication:', err);
@@ -128,7 +213,6 @@ export default function MedicationsScreen() {
   const handleEditMedication = async () => {
     if (!selectedMedication) return;
 
-    // Validation
     if (!title.trim()) {
       Alert.alert('Error', 'Please enter medication name');
       return;
@@ -137,30 +221,69 @@ export default function MedicationsScreen() {
       Alert.alert('Error', 'Please enter dosage');
       return;
     }
-    if (!frequency.trim()) {
-      Alert.alert('Error', 'Please enter frequency');
-      return;
-    }
 
     setSubmitting(true);
     try {
+      const reminderTime = { hour: reminderHour, minute: reminderMinute };
       const payload: UpdateMedicationPayload = {
         title: title.trim(),
-        frequency: frequency.trim(),
         dosage: dosage.trim(),
         type,
+        frequency,
+        reminderTime,
+        weekday: frequency === 'weekly' ? weekday : undefined,
       };
+
+      // Cancel old notification
+      if (selectedMedication.notificationId) {
+        try {
+          await cancelMedicationNotification(selectedMedication.notificationId);
+        } catch (e) {
+          console.error('Failed to cancel old notification (non-fatal):', e);
+        }
+      }
 
       await updateMedication(session!.accessToken, selectedMedication.id, payload);
 
-      // Refresh list
-      await fetchMedications();
+      // Schedule new notification
+      try {
+        const notificationId = await scheduleMedicationNotification({
+          medicationId: selectedMedication.id,
+          title: title.trim(),
+          dosage: dosage.trim(),
+          frequency,
+          reminderTime,
+          weekday: frequency === 'weekly' ? weekday : undefined,
+        });
 
-      // Reset form
+        await updateMedication(session!.accessToken, selectedMedication.id, { notificationId });
+
+        const scheduledAt = getNextScheduledAt(reminderHour, reminderMinute, frequency, frequency === 'weekly' ? weekday : undefined);
+        await updateNotificationRegistryBySourceId(session!.accessToken, selectedMedication.id, {
+          title: '💊 Medication Reminder',
+          body: frequency === 'daily'
+            ? `Time to take ${title.trim()} (${dosage.trim()})`
+            : `Weekly reminder: Take ${title.trim()} (${dosage.trim()})`,
+          data: { medicineId: selectedMedication.id, screen: 'MedicineDetail' },
+          trigger: {
+            hour: reminderHour,
+            minute: reminderMinute,
+            repeats: true,
+            ...(frequency === 'weekly' ? { weekday } : {}),
+          },
+          scheduledAt,
+          repeats: true,
+          status: 'active',
+          deviceId: expoPushToken ?? '',
+        });
+      } catch (notifErr) {
+        console.error('Notification rescheduling failed (non-fatal):', notifErr);
+      }
+
+      await fetchMedications();
       resetForm();
       setShowEditModal(false);
       setSelectedMedication(null);
-
       Alert.alert('Success', 'Medication updated successfully!');
     } catch (err) {
       console.error('Failed to update medication:', err);
@@ -177,15 +300,30 @@ export default function MedicationsScreen() {
       'Delete Medication',
       `Are you sure you want to delete "${selectedMedication.title}"?`,
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
+              // Cancel local notification
+              if (selectedMedication.notificationId) {
+                try {
+                  await cancelMedicationNotification(selectedMedication.notificationId);
+                } catch (e) {
+                  console.error('Failed to cancel notification (non-fatal):', e);
+                }
+              }
+
+              // Mark registry as cancelled
+              try {
+                await updateNotificationRegistryBySourceId(session!.accessToken, selectedMedication.id, {
+                  status: 'cancelled',
+                });
+              } catch (e) {
+                console.error('Failed to cancel notification registry (non-fatal):', e);
+              }
+
               await deleteMedication(session!.accessToken, selectedMedication.id);
               await fetchMedications();
               setShowDetailModal(false);
@@ -209,9 +347,12 @@ export default function MedicationsScreen() {
   const openEditFromDetail = () => {
     if (!selectedMedication) return;
     setTitle(selectedMedication.title);
-    setFrequency(selectedMedication.frequency);
     setDosage(selectedMedication.dosage);
     setType(selectedMedication.type);
+    setFrequency(selectedMedication.frequency);
+    setReminderHour(selectedMedication.reminderTime?.hour ?? 9);
+    setReminderMinute(selectedMedication.reminderTime?.minute ?? 0);
+    setWeekday(selectedMedication.weekday ?? 2);
     setShowDetailModal(false);
     setShowEditModal(true);
   };
@@ -284,8 +425,8 @@ export default function MedicationsScreen() {
                     <Text style={styles.infoValue}>{medication.dosage}</Text>
                   </View>
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Frequency:</Text>
-                    <Text style={styles.infoValue}>{medication.frequency}</Text>
+                    <Text style={styles.infoLabel}>Reminder:</Text>
+                    <Text style={styles.infoValue}>{formatFrequency(medication)}</Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -344,8 +485,8 @@ export default function MedicationsScreen() {
                     <Text style={styles.detailValue}>{selectedMedication.dosage}</Text>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Frequency</Text>
-                    <Text style={styles.detailValue}>{selectedMedication.frequency}</Text>
+                    <Text style={styles.detailLabel}>Reminder</Text>
+                    <Text style={styles.detailValue}>{formatFrequency(selectedMedication)}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Added</Text>
@@ -487,17 +628,128 @@ export default function MedicationsScreen() {
                   />
                 </View>
 
-                {/* Frequency */}
+                {/* Frequency Picker */}
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Frequency *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g., Once daily"
-                    placeholderTextColor={currentTheme.mutedForeground}
-                    value={frequency}
-                    onChangeText={setFrequency}
-                    editable={!submitting}
-                  />
+                  <TouchableOpacity
+                    style={styles.pickerButton}
+                    onPress={() => setShowFrequencyPicker(!showFrequencyPicker)}
+                    disabled={submitting}
+                  >
+                    <Text style={styles.pickerButtonText}>
+                      {MEDICATION_FREQUENCIES.find((f) => f.value === frequency)?.label}
+                    </Text>
+                    <ChevronDown size={20} color={currentTheme.mutedForeground} />
+                  </TouchableOpacity>
+                  {showFrequencyPicker && (
+                    <View style={styles.pickerOptions}>
+                      {MEDICATION_FREQUENCIES.map((freq) => (
+                        <TouchableOpacity
+                          key={freq.value}
+                          style={styles.pickerOption}
+                          onPress={() => {
+                            setFrequency(freq.value);
+                            setShowFrequencyPicker(false);
+                          }}
+                        >
+                          <Text style={styles.pickerOptionText}>{freq.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {/* Weekday Picker — only for weekly */}
+                {frequency === 'weekly' && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Day of Week *</Text>
+                    <TouchableOpacity
+                      style={styles.pickerButton}
+                      onPress={() => setShowWeekdayPicker(!showWeekdayPicker)}
+                      disabled={submitting}
+                    >
+                      <Text style={styles.pickerButtonText}>
+                        {WEEKDAYS.find((w) => w.value === weekday)?.label}
+                      </Text>
+                      <ChevronDown size={20} color={currentTheme.mutedForeground} />
+                    </TouchableOpacity>
+                    {showWeekdayPicker && (
+                      <View style={styles.pickerOptions}>
+                        {WEEKDAYS.map((day) => (
+                          <TouchableOpacity
+                            key={day.value}
+                            style={styles.pickerOption}
+                            onPress={() => {
+                              setWeekday(day.value);
+                              setShowWeekdayPicker(false);
+                            }}
+                          >
+                            <Text style={styles.pickerOptionText}>{day.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Reminder Time Picker */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Reminder Time *</Text>
+                  <View style={styles.timePickerRow}>
+                    {/* Hour */}
+                    <View style={styles.timeUnit}>
+                      <TouchableOpacity
+                        onPress={() => setReminderHour((h) => (h + 1) % 24)}
+                        style={styles.timeArrow}
+                        disabled={submitting}
+                      >
+                        <ChevronUp size={20} color={currentTheme.foreground} />
+                      </TouchableOpacity>
+                      <Text style={styles.timeValue}>
+                        {String(reminderHour % 12 || 12).padStart(2, '0')}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setReminderHour((h) => (h - 1 + 24) % 24)}
+                        style={styles.timeArrow}
+                        disabled={submitting}
+                      >
+                        <ChevronDown size={20} color={currentTheme.foreground} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.timeColon}>:</Text>
+                    {/* Minute */}
+                    <View style={styles.timeUnit}>
+                      <TouchableOpacity
+                        onPress={() => setReminderMinute((m) => (m + 5) % 60)}
+                        style={styles.timeArrow}
+                        disabled={submitting}
+                      >
+                        <ChevronUp size={20} color={currentTheme.foreground} />
+                      </TouchableOpacity>
+                      <Text style={styles.timeValue}>
+                        {String(reminderMinute).padStart(2, '0')}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setReminderMinute((m) => (m - 5 + 60) % 60)}
+                        style={styles.timeArrow}
+                        disabled={submitting}
+                      >
+                        <ChevronDown size={20} color={currentTheme.foreground} />
+                      </TouchableOpacity>
+                    </View>
+                    {/* AM/PM */}
+                    <TouchableOpacity
+                      style={styles.ampmButton}
+                      onPress={() =>
+                        setReminderHour((h) => (h >= 12 ? h - 12 : h + 12))
+                      }
+                      disabled={submitting}
+                    >
+                      <Text style={styles.ampmText}>
+                        {reminderHour >= 12 ? 'PM' : 'AM'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </ScrollView>
 
@@ -633,17 +885,128 @@ export default function MedicationsScreen() {
                   />
                 </View>
 
-                {/* Frequency */}
+                {/* Frequency Picker */}
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Frequency *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g., Once daily"
-                    placeholderTextColor={currentTheme.mutedForeground}
-                    value={frequency}
-                    onChangeText={setFrequency}
-                    editable={!submitting}
-                  />
+                  <TouchableOpacity
+                    style={styles.pickerButton}
+                    onPress={() => setShowFrequencyPicker(!showFrequencyPicker)}
+                    disabled={submitting}
+                  >
+                    <Text style={styles.pickerButtonText}>
+                      {MEDICATION_FREQUENCIES.find((f) => f.value === frequency)?.label}
+                    </Text>
+                    <ChevronDown size={20} color={currentTheme.mutedForeground} />
+                  </TouchableOpacity>
+                  {showFrequencyPicker && (
+                    <View style={styles.pickerOptions}>
+                      {MEDICATION_FREQUENCIES.map((freq) => (
+                        <TouchableOpacity
+                          key={freq.value}
+                          style={styles.pickerOption}
+                          onPress={() => {
+                            setFrequency(freq.value);
+                            setShowFrequencyPicker(false);
+                          }}
+                        >
+                          <Text style={styles.pickerOptionText}>{freq.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {/* Weekday Picker — only for weekly */}
+                {frequency === 'weekly' && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Day of Week *</Text>
+                    <TouchableOpacity
+                      style={styles.pickerButton}
+                      onPress={() => setShowWeekdayPicker(!showWeekdayPicker)}
+                      disabled={submitting}
+                    >
+                      <Text style={styles.pickerButtonText}>
+                        {WEEKDAYS.find((w) => w.value === weekday)?.label}
+                      </Text>
+                      <ChevronDown size={20} color={currentTheme.mutedForeground} />
+                    </TouchableOpacity>
+                    {showWeekdayPicker && (
+                      <View style={styles.pickerOptions}>
+                        {WEEKDAYS.map((day) => (
+                          <TouchableOpacity
+                            key={day.value}
+                            style={styles.pickerOption}
+                            onPress={() => {
+                              setWeekday(day.value);
+                              setShowWeekdayPicker(false);
+                            }}
+                          >
+                            <Text style={styles.pickerOptionText}>{day.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Reminder Time Picker */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Reminder Time *</Text>
+                  <View style={styles.timePickerRow}>
+                    {/* Hour */}
+                    <View style={styles.timeUnit}>
+                      <TouchableOpacity
+                        onPress={() => setReminderHour((h) => (h + 1) % 24)}
+                        style={styles.timeArrow}
+                        disabled={submitting}
+                      >
+                        <ChevronUp size={20} color={currentTheme.foreground} />
+                      </TouchableOpacity>
+                      <Text style={styles.timeValue}>
+                        {String(reminderHour % 12 || 12).padStart(2, '0')}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setReminderHour((h) => (h - 1 + 24) % 24)}
+                        style={styles.timeArrow}
+                        disabled={submitting}
+                      >
+                        <ChevronDown size={20} color={currentTheme.foreground} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.timeColon}>:</Text>
+                    {/* Minute */}
+                    <View style={styles.timeUnit}>
+                      <TouchableOpacity
+                        onPress={() => setReminderMinute((m) => (m + 5) % 60)}
+                        style={styles.timeArrow}
+                        disabled={submitting}
+                      >
+                        <ChevronUp size={20} color={currentTheme.foreground} />
+                      </TouchableOpacity>
+                      <Text style={styles.timeValue}>
+                        {String(reminderMinute).padStart(2, '0')}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setReminderMinute((m) => (m - 5 + 60) % 60)}
+                        style={styles.timeArrow}
+                        disabled={submitting}
+                      >
+                        <ChevronDown size={20} color={currentTheme.foreground} />
+                      </TouchableOpacity>
+                    </View>
+                    {/* AM/PM */}
+                    <TouchableOpacity
+                      style={styles.ampmButton}
+                      onPress={() =>
+                        setReminderHour((h) => (h >= 12 ? h - 12 : h + 12))
+                      }
+                      disabled={submitting}
+                    >
+                      <Text style={styles.ampmText}>
+                        {reminderHour >= 12 ? 'PM' : 'AM'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </ScrollView>
 
@@ -1029,5 +1392,50 @@ const createStyles = (theme: typeof themes.light) =>
       fontSize: 16,
       fontWeight: '600',
       color: theme.primaryForeground,
+    },
+    timePickerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: theme.card,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+    },
+    timeUnit: {
+      alignItems: 'center',
+      gap: 4,
+    },
+    timeArrow: {
+      padding: 4,
+    },
+    timeValue: {
+      fontSize: 24,
+      fontWeight: '600',
+      color: theme.cardForeground,
+      minWidth: 36,
+      textAlign: 'center',
+    },
+    timeColon: {
+      fontSize: 24,
+      fontWeight: '600',
+      color: theme.cardForeground,
+      marginBottom: 4,
+    },
+    ampmButton: {
+      marginLeft: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      backgroundColor: theme.primary + '20',
+      borderWidth: 1,
+      borderColor: theme.primary,
+    },
+    ampmText: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: theme.primary,
     },
   });
