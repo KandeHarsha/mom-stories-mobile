@@ -5,18 +5,18 @@ import { ArrowLeft, Calendar as CalendarIcon, CalendarPlus, ChevronDown, Plus, S
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -100,7 +100,7 @@ export default function AppointmentsScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [appointmentDate, setAppointmentDate] = useState(new Date().toISOString().split('T')[0]);
   const [doctorName, setDoctorName] = useState('');
-  const [appointmentType, setAppointmentType] = useState<AppointmentType | ''>('');
+  const [appointmentType, setAppointmentType] = useState<AppointmentType>('doctor');
   const [fastingRequired, setFastingRequired] = useState(false);
   const [showDateCalendar, setShowDateCalendar] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
@@ -177,12 +177,12 @@ export default function AppointmentsScreen() {
     try {
       const dateISO = new Date(appointmentDate).toISOString();
 
-      const body: any = { date: dateISO };
+      const body: any = { 
+        date: dateISO,
+        type: appointmentType
+      };
       if (doctorName.trim()) {
         body.doctor = doctorName.trim();
-      }
-      if (appointmentType) {
-        body.type = appointmentType;
       }
       if (fastingRequired) {
         body.fastingRequired = true;
@@ -207,7 +207,7 @@ export default function AppointmentsScreen() {
       // Reset form
       setAppointmentDate(new Date().toISOString().split('T')[0]);
       setDoctorName('');
-      setAppointmentType('');
+      setAppointmentType('doctor');
       setFastingRequired(false);
       setShowAddModal(false);
 
@@ -628,13 +628,13 @@ export default function AppointmentsScreen() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Appointment Type (Optional)</Text>
+                  <Text style={styles.inputLabel}>Appointment Type *</Text>
                   <TouchableOpacity
                     style={styles.dateButton}
                     onPress={() => setShowTypeDropdown(!showTypeDropdown)}
                   >
                     <Text style={styles.dateButtonText}>
-                      {appointmentType ? getAppointmentTypeLabel(appointmentType as AppointmentType) : 'Select type'}
+                      {getAppointmentTypeLabel(appointmentType)}
                     </Text>
                     <ChevronDown size={20} color={currentTheme.mutedForeground} />
                   </TouchableOpacity>
@@ -935,17 +935,7 @@ export default function AppointmentsScreen() {
                       )}
                     </View>
 
-                    <View style={styles.inputGroup}>
-                      <View style={styles.switchContainer}>
-                        <Text style={styles.inputLabel}>Cancelled</Text>
-                        <Switch
-                          value={isCancelled}
-                          onValueChange={setIsCancelled}
-                          trackColor={{ false: currentTheme.muted, true: currentTheme.destructive }}
-                          thumbColor={isCancelled ? currentTheme.primaryForeground : currentTheme.mutedForeground}
-                        />
-                      </View>
-                    </View>
+                    
 
                     <View style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>Notes</Text>
@@ -959,6 +949,18 @@ export default function AppointmentsScreen() {
                         textAlignVertical="top"
                         placeholderTextColor={currentTheme.mutedForeground}
                       />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <View style={styles.switchContainer}>
+                        <Text style={styles.inputLabel}>Cancelled</Text>
+                        <Switch
+                          value={isCancelled}
+                          onValueChange={setIsCancelled}
+                          trackColor={{ false: currentTheme.muted, true: currentTheme.destructive }}
+                          thumbColor={isCancelled ? currentTheme.primaryForeground : currentTheme.mutedForeground}
+                        />
+                      </View>
                     </View>
 
                     <View style={styles.modalActions}>
