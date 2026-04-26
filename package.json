@@ -1,7 +1,7 @@
 {
   "name": "mom-stories-mobile",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "scripts": {
     "start": "expo start",
     "dev": "cross-env APP_VARIANT=development npx expo start",
@@ -9,7 +9,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "version:patch": "node ./scripts/increment-version.js",
+    "version:minor": "node ./scripts/increment-version.js minor",
+    "version:major": "node ./scripts/increment-version.js major"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

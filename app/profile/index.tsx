@@ -1,5 +1,6 @@
 import themes from '@/constants/colors'
 import { useAuth } from '@/context/AuthContext'
+import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
 import * as Updates from 'expo-updates'
 import { Baby, ChevronRight, Download, HelpCircle, LogIn, LogOut, RefreshCw, Settings, Shield, User } from 'lucide-react-native'
@@ -398,12 +399,29 @@ const ProfileScreen = () => {
         {/* App Info */}
         <View style={styles.appInfo}>
           <Text style={styles.appInfoText}>Mom Stories Mobile</Text>
-          <Text style={styles.appInfoText}>Version 1.0.0</Text>
+          <Text style={styles.appInfoText}>Version {Constants.expoConfig?.version || '1.0.0'}</Text>
+          {Constants.expoConfig?.runtimeVersion && (
+            <Text style={styles.appInfoText}>
+              Runtime: {typeof Constants.expoConfig.runtimeVersion === 'string' 
+                ? Constants.expoConfig.runtimeVersion 
+                : Constants.expoConfig.runtimeVersion.policy || 'appVersion'}
+            </Text>
+          )}
           <Text style={[styles.appInfoText, { marginTop: 8 }]}>
             {currentlyRunning.isEmbeddedLaunch
               ? 'Running built-in version'
-              : 'Running from update'}
+              : `Running from update (${currentlyRunning.updateId?.slice(0, 8) || 'unknown'})`}
           </Text>
+          {isUpdateAvailable && (
+            <Text style={[styles.appInfoText, { color: currentTheme.primary, fontWeight: '500' }]}>
+              🎉 New update available!
+            </Text>
+          )}
+          {isUpdatePending && (
+            <Text style={[styles.appInfoText, { color: currentTheme.primary, fontWeight: '500' }]}>
+              ⏳ Update ready to install
+            </Text>
+          )}
           
           {/* Update Actions */}
           <View style={styles.updateLinksContainer}>
