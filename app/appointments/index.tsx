@@ -30,6 +30,7 @@ interface Appointment {
   userId: string;
   date: string;
   type?: AppointmentType;
+  tests?: string[];
   fastingRequired?: boolean;
   doctor?: string;
   notes?: string;
@@ -84,6 +85,7 @@ const normalizeAppointment = (appointment: any): Appointment => ({
   ...appointment,
   medications: normalizeStringArray(appointment?.medications),
   exercises: normalizeStringArray(appointment?.exercises),
+  tests: normalizeStringArray(appointment?.tests),
 });
 
 export default function AppointmentsScreen() {
@@ -101,6 +103,8 @@ export default function AppointmentsScreen() {
   const [appointmentDate, setAppointmentDate] = useState(new Date().toISOString().split('T')[0]);
   const [doctorName, setDoctorName] = useState('');
   const [appointmentType, setAppointmentType] = useState<AppointmentType>('doctor');
+  const [tests, setTests] = useState<string[]>([]);
+  const [currentTest, setCurrentTest] = useState('');
   const [fastingRequired, setFastingRequired] = useState(false);
   const [showDateCalendar, setShowDateCalendar] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
@@ -114,6 +118,8 @@ export default function AppointmentsScreen() {
   const [notes, setNotes] = useState('');
   const [medications, setMedications] = useState<string[]>([]);
   const [currentMedication, setCurrentMedication] = useState('');
+  const [editTests, setEditTests] = useState<string[]>([]);
+  const [currentEditTest, setCurrentEditTest] = useState('');
   const [exercises, setExercises] = useState<string[]>([]);
   const [currentExercise, setCurrentExercise] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
@@ -188,6 +194,9 @@ export default function AppointmentsScreen() {
       if (fastingRequired) {
         body.fastingRequired = true;
       }
+      if (tests.length > 0) {
+        body.tests = tests;
+      }
 
       const response = await fetch(`${API_BASE_URL}/appointment`, {
         method: 'POST',
@@ -209,6 +218,8 @@ export default function AppointmentsScreen() {
       setAppointmentDate(new Date().toISOString().split('T')[0]);
       setDoctorName('');
       setAppointmentType('doctor');
+      setTests([]);
+      setCurrentTest('');
       setFastingRequired(false);
       setShowAddModal(false);
 
@@ -250,6 +261,9 @@ export default function AppointmentsScreen() {
       if (exercises.length > 0) {
         formData.append('exercises', JSON.stringify(exercises));
       }
+      if (editTests.length > 0) {
+        formData.append('tests', JSON.stringify(editTests));
+      }
       if (followUpDate) {
         formData.append('followUp', new Date(followUpDate).toISOString());
       }
@@ -283,6 +297,8 @@ export default function AppointmentsScreen() {
       setNotes('');
       setMedications([]);
       setExercises([]);
+      setEditTests([]);
+      setCurrentEditTest('');
       setFollowUpDate('');
       setPainScore('');
       setDietPlan('');
@@ -310,6 +326,7 @@ export default function AppointmentsScreen() {
     setNotes(appointment.notes || '');
     setMedications(normalizeStringArray(appointment.medications));
     setExercises(normalizeStringArray(appointment.exercises));
+    setEditTests(normalizeStringArray(appointment.tests));
     setFollowUpDate(appointment.followUp || '');
     setPainScore(appointment.painScore?.toString() || '');
     setDietPlan(appointment.dietPlan || '');
@@ -327,6 +344,28 @@ export default function AppointmentsScreen() {
 
   const removeMedication = (index: number) => {
     setMedications(medications.filter((_, i) => i !== index));
+  };
+
+  const addTest = () => {
+    if (currentTest.trim()) {
+      setTests([...tests, currentTest.trim()]);
+      setCurrentTest('');
+    }
+  };
+
+  const removeTest = (index: number) => {
+    setTests(tests.filter((_, i) => i !== index));
+  };
+
+  const addEditTest = () => {
+    if (currentEditTest.trim()) {
+      setEditTests([...editTests, currentEditTest.trim()]);
+      setCurrentEditTest('');
+    }
+  };
+
+  const removeEditTest = (index: number) => {
+    setEditTests(editTests.filter((_, i) => i !== index));
   };
 
   const addExercise = () => {
@@ -499,6 +538,15 @@ export default function AppointmentsScreen() {
                   </View>
                 )}
 
+                {normalizeStringArray(appointment.tests).length > 0 && (
+                  <View style={styles.notesContainer}>
+                    <Text style={styles.notesLabel}>Tests:</Text>
+                    <Text style={styles.notesText} numberOfLines={2}>
+                      {normalizeStringArray(appointment.tests).join(', ')}
+                    </Text>
+                  </View>
+                )}
+
                 {normalizeStringArray(appointment.exercises).length > 0 && (
                   <View style={styles.notesContainer}>
                     <Text style={styles.notesLabel}>Exercises:</Text>
@@ -533,7 +581,7 @@ export default function AppointmentsScreen() {
                   </View>
                 )}
 
-                {!appointment.notes && !normalizeStringArray(appointment.medications).length && !normalizeStringArray(appointment.exercises).length && (
+                {!appointment.notes && !normalizeStringArray(appointment.medications).length && !normalizeStringArray(appointment.exercises).length && !normalizeStringArray(appointment.tests).length && (
                   <Text style={styles.tapToAddText}>Tap to add details</Text>
                 )}
               </TouchableOpacity>
@@ -579,6 +627,42 @@ export default function AppointmentsScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Appointment Type *</Text>
+                  <TouchableOpacity
+                    style={styles.dateButton}
+                    onPress={() => setShowTypeDropdown(!showTypeDropdown)}
+                  >
+                    <Text style={styles.dateButtonText}>
+                      {getAppointmentTypeLabel(appointmentType)}
+                    </Text>
+                    <ChevronDown size={20} color={currentTheme.mutedForeground} />
+                  </TouchableOpacity>
+                  {showTypeDropdown && (
+                    <View style={styles.dropdown}>
+                      {['doctor', 'lab', 'physiotherapy', 'dietitian', 'mental_wellness'].map((type) => (
+                        <TouchableOpacity
+                          key={type}
+                          style={styles.dropdownItem}
+                          onPress={() => {
+                            setAppointmentType(type as AppointmentType);
+                            setShowTypeDropdown(false);
+                            if (type !== 'lab') {
+                              setFastingRequired(false);
+                              setTests([]);
+                              setCurrentTest('');
+                            }
+                          }}
+                        >
+                          <Text style={styles.dropdownItemText}>
+                            {getAppointmentTypeLabel(type as AppointmentType)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Date *</Text>
                   <TouchableOpacity
                     style={styles.dateButton}
@@ -617,8 +701,41 @@ export default function AppointmentsScreen() {
                   )}
                 </View>
 
+                {appointmentType === 'lab' && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Tests</Text>
+                    <View style={styles.addItemContainer}>
+                      <TextInput
+                        style={styles.addItemInput}
+                        placeholder="Add test..."
+                        value={currentTest}
+                        onChangeText={setCurrentTest}
+                        placeholderTextColor={currentTheme.mutedForeground}
+                        onSubmitEditing={addTest}
+                      />
+                      <TouchableOpacity style={styles.addItemButton} onPress={addTest}>
+                        <Plus size={20} color={currentTheme.primaryForeground} />
+                      </TouchableOpacity>
+                    </View>
+                    {tests.length > 0 && (
+                      <View style={styles.chipContainer}>
+                        {tests.map((test, index) => (
+                          <View key={index} style={styles.chip}>
+                            <Text style={styles.chipText}>{test}</Text>
+                            <TouchableOpacity onPress={() => removeTest(index)}>
+                              <X size={16} color={currentTheme.foreground} />
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Doctor Name (Optional)</Text>
+                  <Text style={styles.inputLabel}>
+                    {appointmentType === 'lab' ? 'Referred by Doctor (Optional)' : 'Doctor Name (Optional)'}
+                  </Text>
                   <View style={styles.inputWithIcon}>
                     <Stethoscope size={20} color={currentTheme.mutedForeground} />
                     <TextInput
@@ -629,40 +746,6 @@ export default function AppointmentsScreen() {
                       placeholderTextColor={currentTheme.mutedForeground}
                     />
                   </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Appointment Type *</Text>
-                  <TouchableOpacity
-                    style={styles.dateButton}
-                    onPress={() => setShowTypeDropdown(!showTypeDropdown)}
-                  >
-                    <Text style={styles.dateButtonText}>
-                      {getAppointmentTypeLabel(appointmentType)}
-                    </Text>
-                    <ChevronDown size={20} color={currentTheme.mutedForeground} />
-                  </TouchableOpacity>
-                  {showTypeDropdown && (
-                    <View style={styles.dropdown}>
-                      {['doctor', 'lab', 'physiotherapy', 'dietitian', 'mental_wellness'].map((type) => (
-                        <TouchableOpacity
-                          key={type}
-                          style={styles.dropdownItem}
-                          onPress={() => {
-                            setAppointmentType(type as AppointmentType);
-                            setShowTypeDropdown(false);
-                            if (type !== 'lab') {
-                              setFastingRequired(false);
-                            }
-                          }}
-                        >
-                          <Text style={styles.dropdownItemText}>
-                            {getAppointmentTypeLabel(type as AppointmentType)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
                 </View>
 
                 {appointmentType === 'lab' && (
@@ -817,23 +900,68 @@ export default function AppointmentsScreen() {
                     )}
 
                     {selectedAppointment.type === 'lab' && (
-                      <View style={styles.inputGroup}>
-                        <View style={styles.switchContainer}>
-                          <Text style={styles.inputLabel}>Fasting Required</Text>
+                      <>
+                        <View style={styles.inputGroup}>
+                          <Text style={styles.inputLabel}>Tests</Text>
                           {selectedAppointment.isCancelled ? (
-                            <Text style={styles.readOnlyText}>
-                              {editFastingRequired ? 'Yes' : 'No'}
-                            </Text>
+                            <View style={styles.readOnlyField}>
+                              {editTests.length > 0 ? (
+                                <Text style={styles.readOnlyText}>
+                                  {editTests.join(', ')}
+                                </Text>
+                              ) : (
+                                <Text style={styles.readOnlyText}>None</Text>
+                              )}
+                            </View>
                           ) : (
-                            <Switch
-                              value={editFastingRequired}
-                              onValueChange={setEditFastingRequired}
-                              trackColor={{ false: currentTheme.muted, true: currentTheme.primary }}
-                              thumbColor={editFastingRequired ? currentTheme.primaryForeground : currentTheme.mutedForeground}
-                            />
+                            <>
+                              <View style={styles.addItemContainer}>
+                                <TextInput
+                                  style={styles.addItemInput}
+                                  placeholder="Add test..."
+                                  value={currentEditTest}
+                                  onChangeText={setCurrentEditTest}
+                                  placeholderTextColor={currentTheme.mutedForeground}
+                                  onSubmitEditing={addEditTest}
+                                />
+                                <TouchableOpacity style={styles.addItemButton} onPress={addEditTest}>
+                                  <Plus size={20} color={currentTheme.primaryForeground} />
+                                </TouchableOpacity>
+                              </View>
+                              {editTests.length > 0 && (
+                                <View style={styles.chipContainer}>
+                                  {editTests.map((test, index) => (
+                                    <View key={index} style={styles.chip}>
+                                      <Text style={styles.chipText}>{test}</Text>
+                                      <TouchableOpacity onPress={() => removeEditTest(index)}>
+                                        <X size={16} color={currentTheme.foreground} />
+                                      </TouchableOpacity>
+                                    </View>
+                                  ))}
+                                </View>
+                              )}
+                            </>
                           )}
                         </View>
-                      </View>
+
+                        <View style={styles.inputGroup}>
+                          <View style={styles.switchContainer}>
+                            <Text style={styles.inputLabel}>Fasting Required</Text>
+                            {selectedAppointment.isCancelled ? (
+                              <Text style={styles.readOnlyText}>
+                                {editFastingRequired ? 'Yes' : 'No'}
+                              </Text>
+                            ) : (
+                              <Switch
+                                value={editFastingRequired}
+                                onValueChange={setEditFastingRequired}
+                                trackColor={{ false: currentTheme.muted, true: currentTheme.primary }}
+                                thumbColor={editFastingRequired ? currentTheme.primaryForeground : currentTheme.mutedForeground}
+                              />
+                            )}
+                          </View>
+                        </View>
+                      </>
                     )}
 
                     {shouldShowField('medications') && (
