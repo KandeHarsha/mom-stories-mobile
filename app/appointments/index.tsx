@@ -1,7 +1,7 @@
 import themes from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Calendar as CalendarIcon, CalendarPlus, Plus, Stethoscope, X } from 'lucide-react-native';
+import { ArrowLeft, Calendar as CalendarIcon, CalendarPlus, ChevronDown, Plus, Stethoscope, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -12,6 +12,7 @@ import {
     Platform,
     ScrollView,
     StyleSheet,
+    Switch,
     Text,
     TextInput,
     TouchableOpacity,
@@ -22,13 +23,68 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
+type AppointmentType = 'doctor' | 'lab' | 'physiotherapy' | 'dietitian' | 'mental_wellness';
+
 interface Appointment {
   id: string;
+  userId: string;
   date: string;
+  type?: AppointmentType;
+  fastingRequired?: boolean;
   doctor?: string;
-  doctorNotes?: string;
-  medications?: string;
+  notes?: string;
+  medications?: string[];
+  followUp?: string;
+  documents?: string[];
+  exercises?: string[];
+  painScore?: number;
+  dietPlan?: string;
+  isFollowUp?: boolean;
+  parentAppointmentId?: string;
+  isCancelled?: boolean;
+  isRescheduled?: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }
+
+const normalizeStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((item): item is string => typeof item === 'string')
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+    } catch {
+      // Legacy non-JSON string, fallback to comma-separated parsing.
+    }
+
+    return trimmed
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
+const normalizeAppointment = (appointment: any): Appointment => ({
+  ...appointment,
+  medications: normalizeStringArray(appointment?.medications),
+  exercises: normalizeStringArray(appointment?.exercises),
+});
 
 export default function AppointmentsScreen() {
   const { colorScheme } = useColorScheme();
@@ -44,14 +100,27 @@ export default function AppointmentsScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [appointmentDate, setAppointmentDate] = useState(new Date().toISOString().split('T')[0]);
   const [doctorName, setDoctorName] = useState('');
+  const [appointmentType, setAppointmentType] = useState<AppointmentType | ''>('');
+  const [fastingRequired, setFastingRequired] = useState(false);
   const [showDateCalendar, setShowDateCalendar] = useState(false);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Edit appointment modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
-  const [doctorNotes, setDoctorNotes] = useState('');
-  const [medications, setMedications] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [showEditDateCalendar, setShowEditDateCalendar] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [medications, setMedications] = useState<string[]>([]);
+  const [currentMedication, setCurrentMedication] = useState('');
+  const [exercises, setExercises] = useState<string[]>([]);
+  const [currentExercise, setCurrentExercise] = useState('');
+  const [followUpDate, setFollowUpDate] = useState('');
+  const [showFollowUpCalendar, setShowFollowUpCalendar] = useState(false);
+  const [painScore, setPainScore] = useState('');
+  const [dietPlan, setDietPlan] = useState('');
+  const [isCancelled, setIsCancelled] = useState(false);
   const [updating, setUpdating] = useState(false);
 
   const styles = createStyles(currentTheme);
@@ -75,7 +144,11 @@ export default function AppointmentsScreen() {
       }
 
       const data = await response.json();
-      setAppointments(data.appointments || data || []);
+      const rawAppointments = data.appointments || data || [];
+      const normalizedAppointments = Array.isArray(rawAppointments)
+        ? rawAppointments.map(normalizeAppointment)
+        : [];
+      setAppointments(normalizedAppointments);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load appointments');
@@ -108,6 +181,12 @@ export default function AppointmentsScreen() {
       if (doctorName.trim()) {
         body.doctor = doctorName.trim();
       }
+      if (appointmentType) {
+        body.type = appointmentType;
+      }
+      if (fastingRequired) {
+        body.fastingRequired = true;
+      }
 
       const response = await fetch(`${API_BASE_URL}/appointment`, {
         method: 'POST',
@@ -128,6 +207,8 @@ export default function AppointmentsScreen() {
       // Reset form
       setAppointmentDate(new Date().toISOString().split('T')[0]);
       setDoctorName('');
+      setAppointmentType('');
+      setFastingRequired(false);
       setShowAddModal(false);
 
       Alert.alert('Success', 'Appointment added successfully!');
@@ -149,37 +230,70 @@ export default function AppointmentsScreen() {
     setUpdating(true);
 
     try {
-      const body: any = {};
-      if (doctorNotes.trim()) {
-        body.doctorNotes = doctorNotes.trim();
+      const formData = new FormData();
+
+      // Auto-detect rescheduling
+      const originalDate = selectedAppointment.date.split('T')[0];
+      const dateChanged = editDate !== originalDate;
+      if (dateChanged) {
+        formData.append('date', new Date(editDate).toISOString());
+        formData.append('isRescheduled', 'true');
       }
-      if (medications.trim()) {
-        body.medications = medications.trim();
+
+      if (notes.trim()) {
+        formData.append('notes', notes.trim());
       }
+      if (medications.length > 0) {
+        formData.append('medications', JSON.stringify(medications));
+      }
+      if (exercises.length > 0) {
+        formData.append('exercises', JSON.stringify(exercises));
+      }
+      if (followUpDate) {
+        formData.append('followUp', new Date(followUpDate).toISOString());
+      }
+      if (painScore) {
+        formData.append('painScore', painScore);
+      }
+      if (dietPlan.trim()) {
+        formData.append('dietPlan', dietPlan.trim());
+      }
+      formData.append('isCancelled', isCancelled.toString());
 
       const response = await fetch(`${API_BASE_URL}/appointment/${selectedAppointment.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${session.accessToken}`,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(body),
+        body: formData,
       });
 
       if (!response.ok) {
         throw new Error('Failed to update appointment');
       }
 
+      const data = await response.json();
+
       // Refresh appointments list
       await fetchAppointments();
 
       // Reset form
-      setDoctorNotes('');
-      setMedications('');
+      setNotes('');
+      setMedications([]);
+      setExercises([]);
+      setFollowUpDate('');
+      setPainScore('');
+      setDietPlan('');
+      setIsCancelled(false);
+      setEditDate('');
       setSelectedAppointment(null);
       setShowEditModal(false);
 
-      Alert.alert('Success', 'Appointment updated successfully!');
+      let message = 'Appointment updated successfully!';
+      if (data.followUpAppointmentId) {
+        message += ' Follow-up appointment created.';
+      }
+      Alert.alert('Success', message);
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update appointment');
     } finally {
@@ -189,9 +303,64 @@ export default function AppointmentsScreen() {
 
   const openEditModal = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
-    setDoctorNotes(appointment.doctorNotes || '');
-    setMedications(appointment.medications || '');
+    setEditDate(appointment.date.split('T')[0]);
+    setNotes(appointment.notes || '');
+    setMedications(normalizeStringArray(appointment.medications));
+    setExercises(normalizeStringArray(appointment.exercises));
+    setFollowUpDate(appointment.followUp || '');
+    setPainScore(appointment.painScore?.toString() || '');
+    setDietPlan(appointment.dietPlan || '');
+    setIsCancelled(appointment.isCancelled || false);
     setShowEditModal(true);
+  };
+
+  const addMedication = () => {
+    if (currentMedication.trim()) {
+      setMedications([...medications, currentMedication.trim()]);
+      setCurrentMedication('');
+    }
+  };
+
+  const removeMedication = (index: number) => {
+    setMedications(medications.filter((_, i) => i !== index));
+  };
+
+  const addExercise = () => {
+    if (currentExercise.trim()) {
+      setExercises([...exercises, currentExercise.trim()]);
+      setCurrentExercise('');
+    }
+  };
+
+  const removeExercise = (index: number) => {
+    setExercises(exercises.filter((_, i) => i !== index));
+  };
+
+  const shouldShowField = (field: 'medications' | 'exercises' | 'painScore' | 'dietPlan') => {
+    const type = selectedAppointment?.type;
+    if (!type) return true; // no type = show all
+    switch (field) {
+      case 'medications':
+        return type === 'doctor' || type === 'mental_wellness';
+      case 'exercises':
+        return type === 'physiotherapy' || type === 'mental_wellness';
+      case 'painScore':
+        return type === 'physiotherapy';
+      case 'dietPlan':
+        return type === 'dietitian';
+    }
+  };
+
+  const getAppointmentTypeLabel = (type?: AppointmentType) => {
+    if (!type) return null;
+    const labels: Record<AppointmentType, string> = {
+      doctor: 'Doctor',
+      lab: 'Lab',
+      physiotherapy: 'Physiotherapy',
+      dietitian: 'Dietitian',
+      mental_wellness: 'Mental Wellness',
+    };
+    return labels[type];
   };
 
   const formatDate = (dateString: string) => {
@@ -265,6 +434,32 @@ export default function AppointmentsScreen() {
                       {formatDate(appointment.date)}
                     </Text>
                   </View>
+                  <View style={styles.badgesContainer}>
+                    {appointment.type && (
+                      <View style={styles.typeBadge}>
+                        <Text style={styles.typeBadgeText}>{getAppointmentTypeLabel(appointment.type)}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {/* Status Tags */}
+                <View style={styles.statusTagsContainer}>
+                  {appointment.isFollowUp && (
+                    <View style={[styles.statusTag, styles.followUpTag]}>
+                      <Text style={styles.statusTagText}>Follow Up</Text>
+                    </View>
+                  )}
+                  {appointment.isCancelled && (
+                    <View style={[styles.statusTag, styles.cancelledTag]}>
+                      <Text style={styles.statusTagText}>Cancelled</Text>
+                    </View>
+                  )}
+                  {appointment.isRescheduled && (
+                    <View style={[styles.statusTag, styles.rescheduledTag]}>
+                      <Text style={styles.statusTagText}>Rescheduled</Text>
+                    </View>
+                  )}
                 </View>
 
                 {appointment.doctor && (
@@ -276,26 +471,66 @@ export default function AppointmentsScreen() {
                   </View>
                 )}
 
-                {appointment.doctorNotes && (
+                {appointment.fastingRequired && (
+                  <View style={styles.appointmentDetail}>
+                    <Text style={styles.fastingText}>⚠️ Fasting Required</Text>
+                  </View>
+                )}
+
+                {appointment.notes && (
                   <View style={styles.notesContainer}>
                     <Text style={styles.notesLabel}>Notes:</Text>
                     <Text style={styles.notesText} numberOfLines={2}>
-                      {appointment.doctorNotes}
+                      {appointment.notes}
                     </Text>
                   </View>
                 )}
 
-                {appointment.medications && (
+                {normalizeStringArray(appointment.medications).length > 0 && (
                   <View style={styles.notesContainer}>
                     <Text style={styles.notesLabel}>Medications:</Text>
                     <Text style={styles.notesText} numberOfLines={2}>
-                      {appointment.medications}
+                      {normalizeStringArray(appointment.medications).join(', ')}
                     </Text>
                   </View>
                 )}
 
-                {!appointment.doctorNotes && !appointment.medications && (
-                  <Text style={styles.tapToAddText}>Tap to add notes</Text>
+                {normalizeStringArray(appointment.exercises).length > 0 && (
+                  <View style={styles.notesContainer}>
+                    <Text style={styles.notesLabel}>Exercises:</Text>
+                    <Text style={styles.notesText} numberOfLines={2}>
+                      {normalizeStringArray(appointment.exercises).join(', ')}
+                    </Text>
+                  </View>
+                )}
+
+                {appointment.painScore !== undefined && (
+                  <View style={styles.appointmentDetail}>
+                    <Text style={styles.appointmentDetailText}>
+                      Pain Score: {appointment.painScore}/10
+                    </Text>
+                  </View>
+                )}
+
+                {appointment.dietPlan && (
+                  <View style={styles.notesContainer}>
+                    <Text style={styles.notesLabel}>Diet Plan:</Text>
+                    <Text style={styles.notesText} numberOfLines={2}>
+                      {appointment.dietPlan}
+                    </Text>
+                  </View>
+                )}
+
+                {appointment.followUp && (
+                  <View style={styles.appointmentDetail}>
+                    <Text style={styles.followUpText}>
+                      📅 Follow-up: {formatDate(appointment.followUp)}
+                    </Text>
+                  </View>
+                )}
+
+                {!appointment.notes && !normalizeStringArray(appointment.medications).length && !normalizeStringArray(appointment.exercises).length && (
+                  <Text style={styles.tapToAddText}>Tap to add details</Text>
                 )}
               </TouchableOpacity>
             ))
@@ -392,6 +627,54 @@ export default function AppointmentsScreen() {
                   </View>
                 </View>
 
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Appointment Type (Optional)</Text>
+                  <TouchableOpacity
+                    style={styles.dateButton}
+                    onPress={() => setShowTypeDropdown(!showTypeDropdown)}
+                  >
+                    <Text style={styles.dateButtonText}>
+                      {appointmentType ? getAppointmentTypeLabel(appointmentType as AppointmentType) : 'Select type'}
+                    </Text>
+                    <ChevronDown size={20} color={currentTheme.mutedForeground} />
+                  </TouchableOpacity>
+                  {showTypeDropdown && (
+                    <View style={styles.dropdown}>
+                      {['doctor', 'lab', 'physiotherapy', 'dietitian', 'mental_wellness'].map((type) => (
+                        <TouchableOpacity
+                          key={type}
+                          style={styles.dropdownItem}
+                          onPress={() => {
+                            setAppointmentType(type as AppointmentType);
+                            setShowTypeDropdown(false);
+                            if (type !== 'lab') {
+                              setFastingRequired(false);
+                            }
+                          }}
+                        >
+                          <Text style={styles.dropdownItemText}>
+                            {getAppointmentTypeLabel(type as AppointmentType)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {appointmentType === 'lab' && (
+                  <View style={styles.inputGroup}>
+                    <View style={styles.switchContainer}>
+                      <Text style={styles.inputLabel}>Fasting Required</Text>
+                      <Switch
+                        value={fastingRequired}
+                        onValueChange={setFastingRequired}
+                        trackColor={{ false: currentTheme.muted, true: currentTheme.primary }}
+                        thumbColor={fastingRequired ? currentTheme.primaryForeground : currentTheme.mutedForeground}
+                      />
+                    </View>
+                  </View>
+                )}
+
                 <View style={styles.modalActions}>
                   <TouchableOpacity
                     style={styles.cancelButton}
@@ -455,11 +738,43 @@ export default function AppointmentsScreen() {
               >
                 {selectedAppointment && (
                   <>
-                    <View style={styles.appointmentInfo}>
-                      <Text style={styles.appointmentInfoLabel}>Date:</Text>
-                      <Text style={styles.appointmentInfoValue}>
-                        {formatDate(selectedAppointment.date)}
-                      </Text>
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Date</Text>
+                      <TouchableOpacity
+                        style={styles.dateButton}
+                        onPress={() => setShowEditDateCalendar(!showEditDateCalendar)}
+                      >
+                        <CalendarIcon size={20} color={currentTheme.mutedForeground} />
+                        <Text style={styles.dateButtonText}>
+                          {new Date(editDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </Text>
+                      </TouchableOpacity>
+                      {showEditDateCalendar && (
+                        <Calendar
+                          current={editDate}
+                          onDayPress={(day) => {
+                            setEditDate(day.dateString);
+                            setShowEditDateCalendar(false);
+                          }}
+                          theme={{
+                            backgroundColor: currentTheme.card,
+                            calendarBackground: currentTheme.card,
+                            textSectionTitleColor: currentTheme.mutedForeground,
+                            selectedDayBackgroundColor: currentTheme.primary,
+                            selectedDayTextColor: currentTheme.primaryForeground,
+                            todayTextColor: currentTheme.primary,
+                            dayTextColor: currentTheme.cardForeground,
+                            textDisabledColor: currentTheme.mutedForeground,
+                            monthTextColor: currentTheme.cardForeground,
+                            arrowColor: currentTheme.primary,
+                          }}
+                          style={styles.calendar}
+                        />
+                      )}
                     </View>
 
                     {selectedAppointment.doctor && (
@@ -471,27 +786,174 @@ export default function AppointmentsScreen() {
                       </View>
                     )}
 
+                    {selectedAppointment.type && (
+                      <View style={styles.appointmentInfo}>
+                        <Text style={styles.appointmentInfoLabel}>Type:</Text>
+                        <Text style={styles.appointmentInfoValue}>
+                          {getAppointmentTypeLabel(selectedAppointment.type)}
+                        </Text>
+                      </View>
+                    )}
+
+                    {shouldShowField('medications') && (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Medications</Text>
+                        <View style={styles.addItemContainer}>
+                          <TextInput
+                            style={styles.addItemInput}
+                            placeholder="Add medication..."
+                            value={currentMedication}
+                            onChangeText={setCurrentMedication}
+                            placeholderTextColor={currentTheme.mutedForeground}
+                            onSubmitEditing={addMedication}
+                          />
+                          <TouchableOpacity style={styles.addItemButton} onPress={addMedication}>
+                            <Plus size={20} color={currentTheme.primaryForeground} />
+                          </TouchableOpacity>
+                        </View>
+                        {medications.length > 0 && (
+                          <View style={styles.chipContainer}>
+                            {medications.map((med, index) => (
+                              <View key={index} style={styles.chip}>
+                                <Text style={styles.chipText}>{med}</Text>
+                                <TouchableOpacity onPress={() => removeMedication(index)}>
+                                  <X size={16} color={currentTheme.foreground} />
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {shouldShowField('exercises') && (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Exercises</Text>
+                        <View style={styles.addItemContainer}>
+                          <TextInput
+                            style={styles.addItemInput}
+                            placeholder="Add exercise..."
+                            value={currentExercise}
+                            onChangeText={setCurrentExercise}
+                            placeholderTextColor={currentTheme.mutedForeground}
+                            onSubmitEditing={addExercise}
+                          />
+                          <TouchableOpacity style={styles.addItemButton} onPress={addExercise}>
+                            <Plus size={20} color={currentTheme.primaryForeground} />
+                          </TouchableOpacity>
+                        </View>
+                        {exercises.length > 0 && (
+                          <View style={styles.chipContainer}>
+                            {exercises.map((exercise, index) => (
+                              <View key={index} style={styles.chip}>
+                                <Text style={styles.chipText}>{exercise}</Text>
+                                <TouchableOpacity onPress={() => removeExercise(index)}>
+                                  <X size={16} color={currentTheme.foreground} />
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {shouldShowField('painScore') && (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Pain Score (0-10)</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="0-10"
+                          value={painScore}
+                          onChangeText={(text) => {
+                            const num = parseInt(text);
+                            if (text === '' || (!isNaN(num) && num >= 0 && num <= 10)) {
+                              setPainScore(text);
+                            }
+                          }}
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          placeholderTextColor={currentTheme.mutedForeground}
+                        />
+                      </View>
+                    )}
+
+                    {shouldShowField('dietPlan') && (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Diet Plan</Text>
+                        <TextInput
+                          style={[styles.input, styles.textArea]}
+                          placeholder="Add diet recommendations..."
+                          value={dietPlan}
+                          onChangeText={setDietPlan}
+                          multiline
+                          numberOfLines={4}
+                          textAlignVertical="top"
+                          placeholderTextColor={currentTheme.mutedForeground}
+                        />
+                      </View>
+                    )}
+
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Doctor Notes</Text>
-                      <TextInput
-                        style={[styles.input, styles.textArea]}
-                        placeholder="Add notes from your appointment..."
-                        value={doctorNotes}
-                        onChangeText={setDoctorNotes}
-                        multiline
-                        numberOfLines={4}
-                        textAlignVertical="top"
-                        placeholderTextColor={currentTheme.mutedForeground}
-                      />
+                      <Text style={styles.inputLabel}>Follow-up Date (Optional)</Text>
+                      <TouchableOpacity
+                        style={styles.dateButton}
+                        onPress={() => setShowFollowUpCalendar(!showFollowUpCalendar)}
+                      >
+                        <CalendarIcon size={20} color={currentTheme.mutedForeground} />
+                        <Text style={styles.dateButtonText}>
+                          {followUpDate
+                            ? new Date(followUpDate).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })
+                            : 'Select date'}
+                        </Text>
+                      </TouchableOpacity>
+                      {showFollowUpCalendar && (
+                        <Calendar
+                          current={followUpDate || new Date().toISOString().split('T')[0]}
+                          onDayPress={(day) => {
+                            setFollowUpDate(day.dateString);
+                            setShowFollowUpCalendar(false);
+                          }}
+                          minDate={new Date().toISOString().split('T')[0]}
+                          theme={{
+                            backgroundColor: currentTheme.card,
+                            calendarBackground: currentTheme.card,
+                            textSectionTitleColor: currentTheme.mutedForeground,
+                            selectedDayBackgroundColor: currentTheme.primary,
+                            selectedDayTextColor: currentTheme.primaryForeground,
+                            todayTextColor: currentTheme.primary,
+                            dayTextColor: currentTheme.cardForeground,
+                            textDisabledColor: currentTheme.mutedForeground,
+                            monthTextColor: currentTheme.cardForeground,
+                            arrowColor: currentTheme.primary,
+                          }}
+                          style={styles.calendar}
+                        />
+                      )}
                     </View>
 
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Medications</Text>
+                      <View style={styles.switchContainer}>
+                        <Text style={styles.inputLabel}>Cancelled</Text>
+                        <Switch
+                          value={isCancelled}
+                          onValueChange={setIsCancelled}
+                          trackColor={{ false: currentTheme.muted, true: currentTheme.destructive }}
+                          thumbColor={isCancelled ? currentTheme.primaryForeground : currentTheme.mutedForeground}
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Notes</Text>
                       <TextInput
                         style={[styles.input, styles.textArea]}
-                        placeholder="List any prescribed medications..."
-                        value={medications}
-                        onChangeText={setMedications}
+                        placeholder="Add notes from your appointment..."
+                        value={notes}
+                        onChangeText={setNotes}
                         multiline
                         numberOfLines={4}
                         textAlignVertical="top"
@@ -806,5 +1268,120 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.primaryForeground,
     fontSize: 16,
     fontWeight: '600',
+  },
+  badgesContainer: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  typeBadge: {
+    backgroundColor: theme.primary + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  typeBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  statusTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  statusTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  followUpTag: {
+    backgroundColor: '#3b82f6' + '20',
+  },
+  cancelledTag: {
+    backgroundColor: '#ef4444' + '20',
+  },
+  rescheduledTag: {
+    backgroundColor: '#f59e0b' + '20',
+  },
+  statusTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.foreground,
+  },
+  fastingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#f59e0b',
+  },
+  followUpText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  dropdown: {
+    marginTop: 8,
+    backgroundColor: theme.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    color: theme.cardForeground,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  addItemContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  addItemInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    backgroundColor: theme.card,
+    color: theme.cardForeground,
+  },
+  addItemButton: {
+    backgroundColor: theme.primary,
+    borderRadius: 8,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.muted,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  chipText: {
+    fontSize: 14,
+    color: theme.foreground,
   },
 });

@@ -7,17 +7,17 @@ import { Baby, BookHeart, Calendar, CalendarIcon, CalendarPlus, Heart, Pill, Rul
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Calendar as RNCalendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -47,10 +47,24 @@ interface BabyProfile {
 
 interface Appointment {
   id: string;
+  userId: string;
   date: string;
+  type?: 'doctor' | 'lab' | 'physiotherapy' | 'dietitian' | 'mental_wellness';
+  fastingRequired?: boolean;
   doctor?: string;
-  doctorNotes?: string;
-  medications?: string;
+  notes?: string;
+  medications?: string[];
+  followUp?: string;
+  documents?: string[];
+  exercises?: string[];
+  painScore?: number;
+  dietPlan?: string;
+  isFollowUp?: boolean;
+  parentAppointmentId?: string;
+  isCancelled?: boolean;
+  isRescheduled?: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export default function Home() {
