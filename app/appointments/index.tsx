@@ -728,7 +728,9 @@ export default function AppointmentsScreen() {
               <View style={styles.modalHeader}>
                 <View style={styles.modalHeaderContent}>
                   <CalendarIcon size={24} color={currentTheme.primary} />
-                  <Text style={styles.modalTitle}>Appointment Details</Text>
+                  <Text style={styles.modalTitle}>
+                    {selectedAppointment?.isCancelled ? 'Appointment Details (Cancelled)' : 'Appointment Details'}
+                  </Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowEditModal(false)}>
                   <X size={24} color={currentTheme.foreground} />
@@ -744,40 +746,55 @@ export default function AppointmentsScreen() {
                   <>
                     <View style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>Date</Text>
-                      <TouchableOpacity
-                        style={styles.dateButton}
-                        onPress={() => setShowEditDateCalendar(!showEditDateCalendar)}
-                      >
-                        <CalendarIcon size={20} color={currentTheme.mutedForeground} />
-                        <Text style={styles.dateButtonText}>
-                          {new Date(editDate).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </Text>
-                      </TouchableOpacity>
-                      {showEditDateCalendar && (
-                        <Calendar
-                          current={editDate}
-                          onDayPress={(day) => {
-                            setEditDate(day.dateString);
-                            setShowEditDateCalendar(false);
-                          }}
-                          theme={{
-                            backgroundColor: currentTheme.card,
-                            calendarBackground: currentTheme.card,
-                            textSectionTitleColor: currentTheme.mutedForeground,
-                            selectedDayBackgroundColor: currentTheme.primary,
-                            selectedDayTextColor: currentTheme.primaryForeground,
-                            todayTextColor: currentTheme.primary,
-                            dayTextColor: currentTheme.cardForeground,
-                            textDisabledColor: currentTheme.mutedForeground,
-                            monthTextColor: currentTheme.cardForeground,
-                            arrowColor: currentTheme.primary,
-                          }}
-                          style={styles.calendar}
-                        />
+                      {selectedAppointment.isCancelled ? (
+                        <View style={styles.readOnlyField}>
+                          <CalendarIcon size={20} color={currentTheme.mutedForeground} />
+                          <Text style={styles.readOnlyText}>
+                            {new Date(editDate).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </Text>
+                        </View>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={styles.dateButton}
+                            onPress={() => setShowEditDateCalendar(!showEditDateCalendar)}
+                          >
+                            <CalendarIcon size={20} color={currentTheme.mutedForeground} />
+                            <Text style={styles.dateButtonText}>
+                              {new Date(editDate).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </Text>
+                          </TouchableOpacity>
+                          {showEditDateCalendar && (
+                            <Calendar
+                              current={editDate}
+                              onDayPress={(day) => {
+                                setEditDate(day.dateString);
+                                setShowEditDateCalendar(false);
+                              }}
+                              theme={{
+                                backgroundColor: currentTheme.card,
+                                calendarBackground: currentTheme.card,
+                                textSectionTitleColor: currentTheme.mutedForeground,
+                                selectedDayBackgroundColor: currentTheme.primary,
+                                selectedDayTextColor: currentTheme.primaryForeground,
+                                todayTextColor: currentTheme.primary,
+                                dayTextColor: currentTheme.cardForeground,
+                                textDisabledColor: currentTheme.mutedForeground,
+                                monthTextColor: currentTheme.cardForeground,
+                                arrowColor: currentTheme.primary,
+                              }}
+                              style={styles.calendar}
+                            />
+                          )}
+                        </>
                       )}
                     </View>
 
@@ -803,12 +820,18 @@ export default function AppointmentsScreen() {
                       <View style={styles.inputGroup}>
                         <View style={styles.switchContainer}>
                           <Text style={styles.inputLabel}>Fasting Required</Text>
-                          <Switch
-                            value={editFastingRequired}
-                            onValueChange={setEditFastingRequired}
-                            trackColor={{ false: currentTheme.muted, true: currentTheme.primary }}
-                            thumbColor={editFastingRequired ? currentTheme.primaryForeground : currentTheme.mutedForeground}
-                          />
+                          {selectedAppointment.isCancelled ? (
+                            <Text style={styles.readOnlyText}>
+                              {editFastingRequired ? 'Yes' : 'No'}
+                            </Text>
+                          ) : (
+                            <Switch
+                              value={editFastingRequired}
+                              onValueChange={setEditFastingRequired}
+                              trackColor={{ false: currentTheme.muted, true: currentTheme.primary }}
+                              thumbColor={editFastingRequired ? currentTheme.primaryForeground : currentTheme.mutedForeground}
+                            />
+                          )}
                         </View>
                       </View>
                     )}
@@ -816,30 +839,44 @@ export default function AppointmentsScreen() {
                     {shouldShowField('medications') && (
                       <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>Medications</Text>
-                        <View style={styles.addItemContainer}>
-                          <TextInput
-                            style={styles.addItemInput}
-                            placeholder="Add medication..."
-                            value={currentMedication}
-                            onChangeText={setCurrentMedication}
-                            placeholderTextColor={currentTheme.mutedForeground}
-                            onSubmitEditing={addMedication}
-                          />
-                          <TouchableOpacity style={styles.addItemButton} onPress={addMedication}>
-                            <Plus size={20} color={currentTheme.primaryForeground} />
-                          </TouchableOpacity>
-                        </View>
-                        {medications.length > 0 && (
-                          <View style={styles.chipContainer}>
-                            {medications.map((med, index) => (
-                              <View key={index} style={styles.chip}>
-                                <Text style={styles.chipText}>{med}</Text>
-                                <TouchableOpacity onPress={() => removeMedication(index)}>
-                                  <X size={16} color={currentTheme.foreground} />
-                                </TouchableOpacity>
-                              </View>
-                            ))}
+                        {selectedAppointment.isCancelled ? (
+                          <View style={styles.readOnlyField}>
+                            {medications.length > 0 ? (
+                              <Text style={styles.readOnlyText}>
+                                {medications.join(', ')}
+                              </Text>
+                            ) : (
+                              <Text style={styles.readOnlyText}>None</Text>
+                            )}
                           </View>
+                        ) : (
+                          <>
+                            <View style={styles.addItemContainer}>
+                              <TextInput
+                                style={styles.addItemInput}
+                                placeholder="Add medication..."
+                                value={currentMedication}
+                                onChangeText={setCurrentMedication}
+                                placeholderTextColor={currentTheme.mutedForeground}
+                                onSubmitEditing={addMedication}
+                              />
+                              <TouchableOpacity style={styles.addItemButton} onPress={addMedication}>
+                                <Plus size={20} color={currentTheme.primaryForeground} />
+                              </TouchableOpacity>
+                            </View>
+                            {medications.length > 0 && (
+                              <View style={styles.chipContainer}>
+                                {medications.map((med, index) => (
+                                  <View key={index} style={styles.chip}>
+                                    <Text style={styles.chipText}>{med}</Text>
+                                    <TouchableOpacity onPress={() => removeMedication(index)}>
+                                      <X size={16} color={currentTheme.foreground} />
+                                    </TouchableOpacity>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </>
                         )}
                       </View>
                     )}
@@ -847,30 +884,44 @@ export default function AppointmentsScreen() {
                     {shouldShowField('exercises') && (
                       <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>Exercises</Text>
-                        <View style={styles.addItemContainer}>
-                          <TextInput
-                            style={styles.addItemInput}
-                            placeholder="Add exercise..."
-                            value={currentExercise}
-                            onChangeText={setCurrentExercise}
-                            placeholderTextColor={currentTheme.mutedForeground}
-                            onSubmitEditing={addExercise}
-                          />
-                          <TouchableOpacity style={styles.addItemButton} onPress={addExercise}>
-                            <Plus size={20} color={currentTheme.primaryForeground} />
-                          </TouchableOpacity>
-                        </View>
-                        {exercises.length > 0 && (
-                          <View style={styles.chipContainer}>
-                            {exercises.map((exercise, index) => (
-                              <View key={index} style={styles.chip}>
-                                <Text style={styles.chipText}>{exercise}</Text>
-                                <TouchableOpacity onPress={() => removeExercise(index)}>
-                                  <X size={16} color={currentTheme.foreground} />
-                                </TouchableOpacity>
-                              </View>
-                            ))}
+                        {selectedAppointment.isCancelled ? (
+                          <View style={styles.readOnlyField}>
+                            {exercises.length > 0 ? (
+                              <Text style={styles.readOnlyText}>
+                                {exercises.join(', ')}
+                              </Text>
+                            ) : (
+                              <Text style={styles.readOnlyText}>None</Text>
+                            )}
                           </View>
+                        ) : (
+                          <>
+                            <View style={styles.addItemContainer}>
+                              <TextInput
+                                style={styles.addItemInput}
+                                placeholder="Add exercise..."
+                                value={currentExercise}
+                                onChangeText={setCurrentExercise}
+                                placeholderTextColor={currentTheme.mutedForeground}
+                                onSubmitEditing={addExercise}
+                              />
+                              <TouchableOpacity style={styles.addItemButton} onPress={addExercise}>
+                                <Plus size={20} color={currentTheme.primaryForeground} />
+                              </TouchableOpacity>
+                            </View>
+                            {exercises.length > 0 && (
+                              <View style={styles.chipContainer}>
+                                {exercises.map((exercise, index) => (
+                                  <View key={index} style={styles.chip}>
+                                    <Text style={styles.chipText}>{exercise}</Text>
+                                    <TouchableOpacity onPress={() => removeExercise(index)}>
+                                      <X size={16} color={currentTheme.foreground} />
+                                    </TouchableOpacity>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </>
                         )}
                       </View>
                     )}
@@ -878,78 +929,111 @@ export default function AppointmentsScreen() {
                     {shouldShowField('painScore') && (
                       <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>Pain Score (0-10)</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="0-10"
-                          value={painScore}
-                          onChangeText={(text) => {
-                            const num = parseInt(text);
-                            if (text === '' || (!isNaN(num) && num >= 0 && num <= 10)) {
-                              setPainScore(text);
-                            }
-                          }}
-                          keyboardType="number-pad"
-                          maxLength={2}
-                          placeholderTextColor={currentTheme.mutedForeground}
-                        />
+                        {selectedAppointment.isCancelled ? (
+                          <View style={styles.readOnlyField}>
+                            <Text style={styles.readOnlyText}>
+                              {painScore || 'Not recorded'}
+                            </Text>
+                          </View>
+                        ) : (
+                          <TextInput
+                            style={styles.input}
+                            placeholder="0-10"
+                            value={painScore}
+                            onChangeText={(text) => {
+                              const num = parseInt(text);
+                              if (text === '' || (!isNaN(num) && num >= 0 && num <= 10)) {
+                                setPainScore(text);
+                              }
+                            }}
+                            keyboardType="number-pad"
+                            maxLength={2}
+                            placeholderTextColor={currentTheme.mutedForeground}
+                          />
+                        )}
                       </View>
                     )}
 
                     {shouldShowField('dietPlan') && (
                       <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>Diet Plan</Text>
-                        <TextInput
-                          style={[styles.input, styles.textArea]}
-                          placeholder="Add diet recommendations..."
-                          value={dietPlan}
-                          onChangeText={setDietPlan}
-                          multiline
-                          numberOfLines={4}
-                          textAlignVertical="top"
-                          placeholderTextColor={currentTheme.mutedForeground}
-                        />
+                        {selectedAppointment.isCancelled ? (
+                          <View style={styles.readOnlyField}>
+                            <Text style={styles.readOnlyText}>
+                              {dietPlan || 'None'}
+                            </Text>
+                          </View>
+                        ) : (
+                          <TextInput
+                            style={[styles.input, styles.textArea]}
+                            placeholder="Add diet recommendations..."
+                            value={dietPlan}
+                            onChangeText={setDietPlan}
+                            multiline
+                            numberOfLines={4}
+                            textAlignVertical="top"
+                            placeholderTextColor={currentTheme.mutedForeground}
+                          />
+                        )}
                       </View>
                     )}
 
                     <View style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>Follow-up Date (Optional)</Text>
-                      <TouchableOpacity
-                        style={styles.dateButton}
-                        onPress={() => setShowFollowUpCalendar(!showFollowUpCalendar)}
-                      >
-                        <CalendarIcon size={20} color={currentTheme.mutedForeground} />
-                        <Text style={styles.dateButtonText}>
-                          {followUpDate
-                            ? new Date(followUpDate).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              })
-                            : 'Select date'}
-                        </Text>
-                      </TouchableOpacity>
-                      {showFollowUpCalendar && (
-                        <Calendar
-                          current={followUpDate || new Date().toISOString().split('T')[0]}
-                          onDayPress={(day) => {
-                            setFollowUpDate(day.dateString);
-                            setShowFollowUpCalendar(false);
-                          }}
-                          minDate={new Date().toISOString().split('T')[0]}
-                          theme={{
-                            backgroundColor: currentTheme.card,
-                            calendarBackground: currentTheme.card,
-                            textSectionTitleColor: currentTheme.mutedForeground,
-                            selectedDayBackgroundColor: currentTheme.primary,
-                            selectedDayTextColor: currentTheme.primaryForeground,
-                            todayTextColor: currentTheme.primary,
-                            dayTextColor: currentTheme.cardForeground,
-                            textDisabledColor: currentTheme.mutedForeground,
-                            monthTextColor: currentTheme.cardForeground,
-                            arrowColor: currentTheme.primary,
-                          }}
-                          style={styles.calendar}
-                        />
+                      {selectedAppointment.isCancelled ? (
+                        <View style={styles.readOnlyField}>
+                          <CalendarIcon size={20} color={currentTheme.mutedForeground} />
+                          <Text style={styles.readOnlyText}>
+                            {followUpDate
+                              ? new Date(followUpDate).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })
+                              : 'None'}
+                          </Text>
+                        </View>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={styles.dateButton}
+                            onPress={() => setShowFollowUpCalendar(!showFollowUpCalendar)}
+                          >
+                            <CalendarIcon size={20} color={currentTheme.mutedForeground} />
+                            <Text style={styles.dateButtonText}>
+                              {followUpDate
+                                ? new Date(followUpDate).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                  })
+                                : 'Select date'}
+                            </Text>
+                          </TouchableOpacity>
+                          {showFollowUpCalendar && (
+                            <Calendar
+                              current={followUpDate || new Date().toISOString().split('T')[0]}
+                              onDayPress={(day) => {
+                                setFollowUpDate(day.dateString);
+                                setShowFollowUpCalendar(false);
+                              }}
+                              minDate={new Date().toISOString().split('T')[0]}
+                              theme={{
+                                backgroundColor: currentTheme.card,
+                                calendarBackground: currentTheme.card,
+                                textSectionTitleColor: currentTheme.mutedForeground,
+                                selectedDayBackgroundColor: currentTheme.primary,
+                                selectedDayTextColor: currentTheme.primaryForeground,
+                                todayTextColor: currentTheme.primary,
+                                dayTextColor: currentTheme.cardForeground,
+                                textDisabledColor: currentTheme.mutedForeground,
+                                monthTextColor: currentTheme.cardForeground,
+                                arrowColor: currentTheme.primary,
+                              }}
+                              style={styles.calendar}
+                            />
+                          )}
+                        </>
                       )}
                     </View>
 
@@ -957,47 +1041,68 @@ export default function AppointmentsScreen() {
 
                     <View style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>Notes</Text>
-                      <TextInput
-                        style={[styles.input, styles.textArea]}
-                        placeholder="Add notes from your appointment..."
-                        value={notes}
-                        onChangeText={setNotes}
-                        multiline
-                        numberOfLines={4}
-                        textAlignVertical="top"
-                        placeholderTextColor={currentTheme.mutedForeground}
-                      />
+                      {selectedAppointment.isCancelled ? (
+                        <View style={styles.readOnlyField}>
+                          <Text style={styles.readOnlyText}>
+                            {notes || 'None'}
+                          </Text>
+                        </View>
+                      ) : (
+                        <TextInput
+                          style={[styles.input, styles.textArea]}
+                          placeholder="Add notes from your appointment..."
+                          value={notes}
+                          onChangeText={setNotes}
+                          multiline
+                          numberOfLines={4}
+                          textAlignVertical="top"
+                          placeholderTextColor={currentTheme.mutedForeground}
+                        />
+                      )}
                     </View>
 
-                    <View style={styles.inputGroup}>
-                      <View style={styles.switchContainer}>
-                        <Text style={styles.inputLabel}>Cancelled</Text>
-                        <Switch
-                          value={isCancelled}
-                          onValueChange={setIsCancelled}
-                          trackColor={{ false: currentTheme.muted, true: currentTheme.destructive }}
-                          thumbColor={isCancelled ? currentTheme.primaryForeground : currentTheme.mutedForeground}
-                        />
+                    {!selectedAppointment.isCancelled && (
+                      <View style={styles.inputGroup}>
+                        <View style={styles.switchContainer}>
+                          <Text style={styles.inputLabel}>Cancelled</Text>
+                          <Switch
+                            value={isCancelled}
+                            onValueChange={setIsCancelled}
+                            trackColor={{ false: currentTheme.muted, true: currentTheme.destructive }}
+                            thumbColor={isCancelled ? currentTheme.primaryForeground : currentTheme.mutedForeground}
+                          />
+                        </View>
                       </View>
-                    </View>
+                    )}
 
                     <View style={styles.modalActions}>
-                      <TouchableOpacity
-                        style={styles.cancelButton}
-                        onPress={() => setShowEditModal(false)}
-                        disabled={updating}
-                      >
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.submitButton, updating && styles.submitButtonDisabled]}
-                        onPress={handleUpdateAppointment}
-                        disabled={updating}
-                      >
-                        <Text style={styles.submitButtonText}>
-                          {updating ? 'Saving...' : 'Save Details'}
-                        </Text>
-                      </TouchableOpacity>
+                      {selectedAppointment.isCancelled ? (
+                        <TouchableOpacity
+                          style={[styles.submitButton, { flex: 1 }]}
+                          onPress={() => setShowEditModal(false)}
+                        >
+                          <Text style={styles.submitButtonText}>Close</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={() => setShowEditModal(false)}
+                            disabled={updating}
+                          >
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.submitButton, updating && styles.submitButtonDisabled]}
+                            onPress={handleUpdateAppointment}
+                            disabled={updating}
+                          >
+                            <Text style={styles.submitButtonText}>
+                              {updating ? 'Saving...' : 'Save Details'}
+                            </Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
                     </View>
                   </>
                 )}
@@ -1403,5 +1508,22 @@ const createStyles = (theme: any) => StyleSheet.create({
   chipText: {
     fontSize: 14,
     color: theme.foreground,
+  },
+  readOnlyField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: theme.muted,
+    opacity: 0.7,
+  },
+  readOnlyText: {
+    fontSize: 16,
+    color: theme.mutedForeground,
+    flex: 1,
   },
 });
