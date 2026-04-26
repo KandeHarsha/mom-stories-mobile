@@ -3,21 +3,21 @@ import { WHO_LENGTH_CM_RANGES, WHO_WEIGHT_KG_RANGES } from '@/constants/growthDa
 import { useAuth } from '@/context/AuthContext';
 import { useNotification } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
-import { Baby, BookHeart, Calendar, CalendarIcon, Heart, Pill, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
+import { Baby, BookHeart, Calendar, CalendarIcon, CalendarPlus, Heart, Pill, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Calendar as RNCalendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -45,6 +45,28 @@ interface BabyProfile {
   weight: WeightEntry[];
 }
 
+interface Appointment {
+  id: string;
+  userId: string;
+  date: string;
+  type?: 'doctor' | 'lab' | 'physiotherapy' | 'dietitian' | 'mental_wellness';
+  fastingRequired?: boolean;
+  doctor?: string;
+  notes?: string;
+  medications?: string[];
+  followUp?: string;
+  documents?: string[];
+  exercises?: string[];
+  painScore?: number;
+  dietPlan?: string;
+  isFollowUp?: boolean;
+  parentAppointmentId?: string;
+  isCancelled?: boolean;
+  isRescheduled?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export default function Home() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
@@ -54,6 +76,8 @@ export default function Home() {
   const [babyProfile, setBabyProfile] = useState<BabyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [aiQuestion, setAiQuestion] = useState('');
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false);
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -94,6 +118,35 @@ export default function Home() {
 
     fetchBabyProfile();
   }, [session, selectedChildId]);
+
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      if (!session?.accessToken) {
+        return;
+      }
+
+      setAppointmentsLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/appointment`, {
+          headers: {
+            'Authorization': `Bearer ${session.accessToken}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const appointmentsList = data.appointments || data || [];
+          setAppointments(appointmentsList);
+        }
+      } catch (err) {
+        console.error('Failed to fetch appointments:', err);
+      } finally {
+        setAppointmentsLoading(false);
+      }
+    };
+
+    fetchAppointments();
+  }, [session]);
 
   const handleAddMeasurement = async () => {
     if (!weight && !height) {
@@ -209,6 +262,37 @@ export default function Home() {
   };
 
   const userName = user?.FullName || user?.FirstName || 'Mom';
+
+  const getNextAppointment = () => {
+    if (appointments.length === 0) return null;
+    
+    const today = new Date();
+    const futureAppointments = appointments
+      .filter(apt => new Date(apt.date) >= today)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    return futureAppointments[0] || appointments[appointments.length - 1];
+  };
+
+  const formatAppointmentDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Tomorrow';
+    } else {
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric'
+      });
+    }
+  };
+
+  const nextAppointment = getNextAppointment();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -409,7 +493,7 @@ export default function Home() {
           </TouchableOpacity>
         </View>
 
-        {/* Medication Reminders Card */}
+        {/* Medication Reminders & Appointments Row */}
         <View style={styles.featuresRow}>
           <TouchableOpacity
             style={styles.featureCardSmall}
@@ -425,7 +509,28 @@ export default function Home() {
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.featureCardSmall} />
+          <TouchableOpacity
+            style={styles.featureCardSmall}
+            onPress={() => router.push('/appointments')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.featureIconContainerSmall}>
+              <CalendarPlus size={28} color={currentTheme.primary} />
+            </View>
+            <Text style={styles.featureTitleSmall}>Appointments</Text>
+            {appointmentsLoading ? (
+              <ActivityIndicator size="small" color={currentTheme.primary} style={{ marginTop: 8 }} />
+            ) : nextAppointment ? (
+              <Text style={styles.featureDescriptionSmall}>
+                Next: {formatAppointmentDate(nextAppointment.date)}
+                {nextAppointment.doctor && ` - Dr. ${nextAppointment.doctor}`}
+              </Text>
+            ) : (
+              <Text style={styles.featureDescriptionSmall}>
+                No upcoming appointments
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
       </ScrollView>
 

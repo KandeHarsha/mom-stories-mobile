@@ -1,5 +1,7 @@
 import { ConfigContext, ExpoConfig } from 'expo/config';
 
+const packageJson = require('./package.json');
+
 const IS_DEV = process.env.APP_VARIANT === 'development';
 const IS_PREVIEW = process.env.APP_VARIANT === 'preview';
 
@@ -44,7 +46,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   "name": getAppName(),
   "slug": "mom-stories-mobile",
-  "version": "1.0.0",
+  "version": packageJson.version,
   "orientation": "portrait",
   "icon": "./assets/images/icon.png",
   "scheme": getScheme(),
