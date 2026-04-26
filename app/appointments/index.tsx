@@ -120,6 +120,7 @@ export default function AppointmentsScreen() {
   const [showFollowUpCalendar, setShowFollowUpCalendar] = useState(false);
   const [painScore, setPainScore] = useState('');
   const [dietPlan, setDietPlan] = useState('');
+  const [editFastingRequired, setEditFastingRequired] = useState(false);
   const [isCancelled, setIsCancelled] = useState(false);
   const [updating, setUpdating] = useState(false);
 
@@ -258,6 +259,7 @@ export default function AppointmentsScreen() {
       if (dietPlan.trim()) {
         formData.append('dietPlan', dietPlan.trim());
       }
+      formData.append('fastingRequired', editFastingRequired.toString());
       formData.append('isCancelled', isCancelled.toString());
 
       const response = await fetch(`${API_BASE_URL}/appointment/${selectedAppointment.id}`, {
@@ -284,6 +286,7 @@ export default function AppointmentsScreen() {
       setFollowUpDate('');
       setPainScore('');
       setDietPlan('');
+      setEditFastingRequired(false);
       setIsCancelled(false);
       setEditDate('');
       setSelectedAppointment(null);
@@ -310,6 +313,7 @@ export default function AppointmentsScreen() {
     setFollowUpDate(appointment.followUp || '');
     setPainScore(appointment.painScore?.toString() || '');
     setDietPlan(appointment.dietPlan || '');
+    setEditFastingRequired(appointment.fastingRequired || false);
     setIsCancelled(appointment.isCancelled || false);
     setShowEditModal(true);
   };
@@ -792,6 +796,20 @@ export default function AppointmentsScreen() {
                         <Text style={styles.appointmentInfoValue}>
                           {getAppointmentTypeLabel(selectedAppointment.type)}
                         </Text>
+                      </View>
+                    )}
+
+                    {selectedAppointment.type === 'lab' && (
+                      <View style={styles.inputGroup}>
+                        <View style={styles.switchContainer}>
+                          <Text style={styles.inputLabel}>Fasting Required</Text>
+                          <Switch
+                            value={editFastingRequired}
+                            onValueChange={setEditFastingRequired}
+                            trackColor={{ false: currentTheme.muted, true: currentTheme.primary }}
+                            thumbColor={editFastingRequired ? currentTheme.primaryForeground : currentTheme.mutedForeground}
+                          />
+                        </View>
                       </View>
                     )}
 
