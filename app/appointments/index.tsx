@@ -1,7 +1,9 @@
 import themes from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Calendar as CalendarIcon, CalendarPlus, ChevronDown, Plus, Stethoscope, X } from 'lucide-react-native';
+import { ArrowLeft, Calendar as CalendarIcon, CalendarPlus, Camera, ChevronDown, FileText, ImageIcon, Plus, Stethoscope, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -127,6 +129,7 @@ export default function AppointmentsScreen() {
   const [painScore, setPainScore] = useState('');
   const [dietPlan, setDietPlan] = useState('');
   const [editFastingRequired, setEditFastingRequired] = useState(false);
+  const [documents, setDocuments] = useState<{name: string, uri: string, size: number, type: 'document' | 'image'}[]>([]);
   const [isCancelled, setIsCancelled] = useState(false);
   const [updating, setUpdating] = useState(false);
 
@@ -261,8 +264,16 @@ export default function AppointmentsScreen() {
       if (exercises.length > 0) {
         formData.append('exercises', JSON.stringify(exercises));
       }
-      if (editTests.length > 0) {
-        formData.append('tests', JSON.stringify(editTests));
+      if (documents.length > 0) {
+        // Upload actual document files
+        documents.forEach((doc, index) => {
+          const fileBlob = {
+            uri: doc.uri,
+            type: 'application/octet-stream', // Generic type, server will handle detection
+            name: doc.name,
+          } as any;
+          formData.append(`document${index}`, fileBlob);
+        });
       }
       if (followUpDate) {
         formData.append('followUp', new Date(followUpDate).toISOString());
@@ -303,6 +314,7 @@ export default function AppointmentsScreen() {
       setPainScore('');
       setDietPlan('');
       setEditFastingRequired(false);
+      setDocuments([]);
       setIsCancelled(false);
       setEditDate('');
       setSelectedAppointment(null);
@@ -331,6 +343,12 @@ export default function AppointmentsScreen() {
     setPainScore(appointment.painScore?.toString() || '');
     setDietPlan(appointment.dietPlan || '');
     setEditFastingRequired(appointment.fastingRequired || false);
+    setDocuments(normalizeStringArray(appointment.documents).map(docName => ({
+      name: docName,
+      uri: '', // Existing documents don't have local URIs
+      size: 0,
+      type: 'document' as const,
+    })));
     setIsCancelled(appointment.isCancelled || false);
     setShowEditModal(true);
   };
@@ -377,6 +395,63 @@ export default function AppointmentsScreen() {
 
   const removeExercise = (index: number) => {
     setExercises(exercises.filter((_, i) => i !== index));
+  };
+
+  const handleDocumentPicker = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*', 'text/*'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const document = result.assets[0];
+        const documentInfo = {
+          name: document.name,
+          uri: document.uri,
+          size: document.size || 0,
+          type: 'document' as const,
+        };
+        setDocuments([...documents, documentInfo]);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick document');
+    }
+  };
+
+  const handleCameraPicker = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant camera permissions to take photos');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const image = result.assets[0];
+        const imageInfo = {
+          name: `photo_${Date.now()}.jpg`,
+          uri: image.uri,
+          size: image.height! * image.width! * 4, // Estimate size
+          type: 'image' as const,
+        };
+        setDocuments([...documents, imageInfo]);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to take photo');
+    }
+  };
+
+  const removeDocument = (index: number) => {
+    setDocuments(documents.filter((_, i) => i !== index));
   };
 
   const shouldShowField = (field: 'medications' | 'exercises' | 'painScore' | 'dietPlan') => {
@@ -434,12 +509,6 @@ export default function AppointmentsScreen() {
             <Text style={styles.headerSubtitle}>Track your medical appointments</Text>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowAddModal(true)}
-        >
-          <Plus size={24} color={currentTheme.primaryForeground} />
-        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -573,6 +642,15 @@ export default function AppointmentsScreen() {
                   </View>
                 )}
 
+                {normalizeStringArray(appointment.documents).length > 0 && (
+                  <View style={styles.notesContainer}>
+                    <Text style={styles.notesLabel}>Documents:</Text>
+                    <Text style={styles.notesText} numberOfLines={2}>
+                      {normalizeStringArray(appointment.documents).join(', ')}
+                    </Text>
+                  </View>
+                )}
+
                 {appointment.followUp && (
                   <View style={styles.appointmentDetail}>
                     <Text style={styles.followUpText}>
@@ -581,7 +659,7 @@ export default function AppointmentsScreen() {
                   </View>
                 )}
 
-                {!appointment.notes && !normalizeStringArray(appointment.medications).length && !normalizeStringArray(appointment.exercises).length && !normalizeStringArray(appointment.tests).length && (
+                {!appointment.notes && !normalizeStringArray(appointment.medications).length && !normalizeStringArray(appointment.exercises).length && !normalizeStringArray(appointment.documents).length && (
                   <Text style={styles.tapToAddText}>Tap to add details</Text>
                 )}
               </TouchableOpacity>
@@ -589,6 +667,15 @@ export default function AppointmentsScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* Add Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setShowAddModal(true)}
+        activeOpacity={0.8}
+      >
+        <Plus size={24} color={currentTheme.primaryForeground} />
+      </TouchableOpacity>
 
       {/* Add Appointment Modal */}
       <Modal
@@ -1107,6 +1194,59 @@ export default function AppointmentsScreen() {
                     )}
 
                     <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Documents & Photos</Text>
+                      {selectedAppointment.isCancelled ? (
+                        <View style={styles.readOnlyField}>
+                          {documents.length > 0 ? (
+                            <Text style={styles.readOnlyText}>
+                              {documents.map(doc => doc.name).join(', ')}
+                            </Text>
+                          ) : (
+                            <Text style={styles.readOnlyText}>None</Text>
+                          )}
+                        </View>
+                      ) : (
+                        <>
+                          <View style={styles.documentButtons}>
+                            <TouchableOpacity
+                              style={styles.documentButton}
+                              onPress={handleDocumentPicker}
+                            >
+                              <FileText size={20} color={currentTheme.primary} />
+                              <Text style={styles.documentButtonText}>Add Document</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.documentButton}
+                              onPress={handleCameraPicker}
+                            >
+                              <Camera size={20} color={currentTheme.primary} />
+                              <Text style={styles.documentButtonText}>Take Photo</Text>
+                            </TouchableOpacity>
+                          </View>
+                          {documents.length > 0 && (
+                            <View style={styles.chipContainer}>
+                              {documents.map((doc, index) => (
+                                <View key={index} style={styles.chip}>
+                                  {doc.type === 'image' ? (
+                                    <ImageIcon size={14} color={currentTheme.foreground} />
+                                  ) : (
+                                    <FileText size={14} color={currentTheme.foreground} />
+                                  )}
+                                  <Text style={styles.chipText} numberOfLines={1}>
+                                    {doc.name} {doc.size > 0 && `(${(doc.size / 1024 / 1024).toFixed(2)} MB)`}
+                                  </Text>
+                                  <TouchableOpacity onPress={() => removeDocument(index)}>
+                                    <X size={16} color={currentTheme.foreground} />
+                                  </TouchableOpacity>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </View>
+
+                    <View style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>Follow-up Date (Optional)</Text>
                       {selectedAppointment.isCancelled ? (
                         <View style={styles.readOnlyField}>
@@ -1279,19 +1419,12 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 14,
     color: theme.mutedForeground,
   },
-  addButton: {
-    backgroundColor: theme.primary,
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   container: {
     flex: 1,
     backgroundColor: theme.background,
     paddingHorizontal: 20,
     paddingVertical: 16,
+    paddingBottom: 80,
   },
   centerContent: {
     justifyContent: 'center',
@@ -1318,6 +1451,22 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.mutedForeground,
     marginTop: 8,
     textAlign: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: theme.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   appointmentCard: {
     backgroundColor: theme.card,
@@ -1632,6 +1781,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
+    maxWidth: 200,
   },
   chipText: {
     fontSize: 14,
@@ -1653,5 +1803,28 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 16,
     color: theme.mutedForeground,
     flex: 1,
+  },
+  documentButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: theme.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: theme.card,
+  },
+  documentButtonText: {
+    color: theme.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  documentButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
   },
 });
