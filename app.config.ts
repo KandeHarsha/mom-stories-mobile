@@ -72,7 +72,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "package": getUniqueIdentifier(),
     "googleServicesFile": "./google-services.json",
     "permissions": [
-      "POST_NOTIFICATIONS"
+      "POST_NOTIFICATIONS",
+      "RECORD_AUDIO"
     ]
   },
   "web": {
@@ -118,6 +119,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         "url": "https://sentry.io/",
         "project": "react-native",
         "organization": "mom-stories"
+      }
+    ],
+    [
+      "expo-speech-recognition",
+      {
+        "microphonePermission": "Allow $(PRODUCT_NAME) to use your microphone for voice input.",
+        "speechRecognitionPermission": "Allow $(PRODUCT_NAME) to recognize your speech for voice input.",
+        "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
       }
     ]
   ],

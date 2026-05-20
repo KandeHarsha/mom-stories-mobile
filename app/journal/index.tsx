@@ -4,13 +4,17 @@ import { useAuth } from '@/context/AuthContext'
 import { Audio } from 'expo-av'
 import * as ImagePicker from 'expo-image-picker'
 import { router } from 'expo-router'
-import { BookOpen, Check, ChevronDown, ChevronRight, ImageIcon, Mic, Plus, RefreshCw, StopCircle, X } from 'lucide-react-native'
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
+import { BookOpen, Check, ChevronDown, ChevronRight, ImageIcon, Mic, MicOff, Plus, RefreshCw, StopCircle, X } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useRef, useState } from 'react'
 import {
   Alert,
+  Animated,
+  Easing,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -151,6 +155,145 @@ const PrivateJournalScreen = () => {
   const recordingRef = useRef<Audio.Recording | null>(null)
   const hasLoadedRef = useRef(false)
   const lastRefreshRef = useRef<number>(0)
+  const [isListeningContent, setIsListeningContent] = useState(false)
+  const pulseAnimContent = useRef(new Animated.Value(1)).current
+  const pulseLoopContent = useRef<Animated.CompositeAnimation | null>(null)
+  const acceptSpeechResultsContent = useRef(false)
+  const speechBaseTextContent = useRef('')
+  const [isListeningTitle, setIsListeningTitle] = useState(false)
+  const pulseAnimTitle = useRef(new Animated.Value(1)).current
+  const pulseLoopTitle = useRef<Animated.CompositeAnimation | null>(null)
+  const acceptSpeechResultsTitle = useRef(false)
+  const speechBaseTextTitle = useRef('')
+
+  const startContentPulse = () => {
+    pulseLoopContent.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimContent, { toValue: 1.35, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnimContent, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    )
+    pulseLoopContent.current.start()
+  }
+
+  const stopContentPulse = () => {
+    pulseLoopContent.current?.stop()
+    pulseAnimContent.setValue(1)
+  }
+
+  const startTitlePulse = () => {
+    pulseLoopTitle.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimTitle, { toValue: 1.35, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnimTitle, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    )
+    pulseLoopTitle.current.start()
+  }
+
+  const stopTitlePulse = () => {
+    pulseLoopTitle.current?.stop()
+    pulseAnimTitle.setValue(1)
+  }
+
+  const toggleTitleSpeech = async () => {
+    if (isListeningTitle) {
+      acceptSpeechResultsTitle.current = false
+      ExpoSpeechRecognitionModule.stop()
+      setIsListeningTitle(false)
+      stopTitlePulse()
+      return
+    }
+
+    const { status } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
+
+    if (status !== 'granted') {
+      Alert.alert(
+        'Microphone Permission Required',
+        'Please allow microphone access to use voice input.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      )
+      return
+    }
+
+    speechBaseTextTitle.current = title
+    acceptSpeechResultsTitle.current = true
+    setIsListeningTitle(true)
+    startTitlePulse()
+    ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false })
+  }
+
+  useSpeechRecognitionEvent('result', (event) => {
+    const transcript = event.results[0]?.transcript ?? ''
+    if (!transcript) return
+    if (acceptSpeechResultsTitle.current) {
+      const base = speechBaseTextTitle.current
+      setTitle(base.trim().length === 0 ? transcript : base.trimEnd() + ' ' + transcript)
+    } else if (acceptSpeechResultsContent.current) {
+      const base = speechBaseTextContent.current
+      setContent(base.trim().length === 0 ? transcript : base.trimEnd() + ' ' + transcript)
+    }
+  })
+
+  useSpeechRecognitionEvent('error', (event) => {
+    if (!acceptSpeechResultsTitle.current && !acceptSpeechResultsContent.current) return
+    console.warn('Speech recognition error:', event.error, event.message)
+    if (event.error !== 'aborted') {
+      Alert.alert('Speech Error', event.message || 'Speech recognition failed. Please try again.')
+    }
+    if (acceptSpeechResultsTitle.current) {
+      setIsListeningTitle(false)
+      stopTitlePulse()
+    } else {
+      setIsListeningContent(false)
+      stopContentPulse()
+    }
+  })
+
+  useSpeechRecognitionEvent('end', () => {
+    if (acceptSpeechResultsTitle.current) {
+      acceptSpeechResultsTitle.current = false
+      setIsListeningTitle(false)
+      stopTitlePulse()
+    } else if (acceptSpeechResultsContent.current) {
+      acceptSpeechResultsContent.current = false
+      setIsListeningContent(false)
+      stopContentPulse()
+    }
+  })
+
+  const toggleContentSpeech = async () => {
+    if (isListeningContent) {
+      acceptSpeechResultsContent.current = false
+      ExpoSpeechRecognitionModule.stop()
+      setIsListeningContent(false)
+      stopContentPulse()
+      return
+    }
+
+    const { status } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
+
+    if (status !== 'granted') {
+      Alert.alert(
+        'Microphone Permission Required',
+        'Please allow microphone access to use voice input.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      )
+      return
+    }
+
+    speechBaseTextContent.current = content
+    acceptSpeechResultsContent.current = true
+    setIsListeningContent(true)
+    startContentPulse()
+    ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false })
+  }
 
   // Load entries when token is available
   useEffect(() => {
@@ -569,27 +712,57 @@ const PrivateJournalScreen = () => {
             {/* Title Input */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Title</Text>
-              <TextInput
-                style={styles.titleInput}
-                placeholder="e.g., A special moment, a worry, a dream..."
-                value={title}
-                onChangeText={setTitle}
-                placeholderTextColor="#999"
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={[styles.titleInput, { paddingRight: 44 }, isListeningTitle && { borderColor: currentTheme.primary }]}
+                  placeholder={isListeningTitle ? 'Listening…' : 'e.g., A special moment, a worry, a dream...'}
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholderTextColor={isListeningTitle ? currentTheme.primary : '#999'}
+                />
+                <TouchableOpacity
+                  onPress={toggleTitleSpeech}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center' }}
+                >
+                  <Animated.View style={{ transform: [{ scale: pulseAnimTitle }] }}>
+                    {isListeningTitle ? (
+                      <MicOff size={20} color={currentTheme.primary} />
+                    ) : (
+                      <Mic size={20} color={currentTheme.mutedForeground} />
+                    )}
+                  </Animated.View>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Content Input */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Your thoughts</Text>
-              <TextInput
-                style={styles.contentInput}
-                placeholder="Let it all flow..."
-                value={content}
-                onChangeText={setContent}
-                multiline
-                textAlignVertical="top"
-                placeholderTextColor="#999"
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={[styles.contentInput, { paddingBottom: 36 }, isListeningContent && { borderColor: currentTheme.primary }]}
+                  placeholder={isListeningContent ? 'Listening…' : 'Let it all flow...'}
+                  value={content}
+                  onChangeText={setContent}
+                  multiline
+                  textAlignVertical="top"
+                  placeholderTextColor={isListeningContent ? currentTheme.primary : '#999'}
+                />
+                <TouchableOpacity
+                  onPress={toggleContentSpeech}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ position: 'absolute', bottom: 10, right: 12 }}
+                >
+                  <Animated.View style={{ transform: [{ scale: pulseAnimContent }] }}>
+                    {isListeningContent ? (
+                      <MicOff size={20} color={currentTheme.primary} />
+                    ) : (
+                      <Mic size={20} color={currentTheme.mutedForeground} />
+                    )}
+                  </Animated.View>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Tag Selector */}
