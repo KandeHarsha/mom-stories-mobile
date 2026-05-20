@@ -3,13 +3,17 @@ import { WHO_LENGTH_CM_RANGES, WHO_WEIGHT_KG_RANGES } from '@/constants/growthDa
 import { useAuth } from '@/context/AuthContext';
 import { useNotification } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
-import { Baby, BookHeart, Calendar, CalendarIcon, CalendarPlus, Heart, Pill, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
+import { Baby, BookHeart, Calendar, CalendarIcon, CalendarPlus, Heart, Mic, MicOff, Pill, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -78,6 +82,81 @@ export default function Home() {
   const [aiQuestion, setAiQuestion] = useState('');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
+  const [isListeningAi, setIsListeningAi] = useState(false);
+  const pulseAnimAi = useRef(new Animated.Value(1)).current;
+  const pulseLoopAi = useRef<Animated.CompositeAnimation | null>(null);
+  const acceptSpeechResultsAi = useRef(false);
+  const speechBaseTextAi = useRef('');
+
+  const startAiPulse = () => {
+    pulseLoopAi.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimAi, { toValue: 1.35, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnimAi, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    pulseLoopAi.current.start();
+  };
+
+  const stopAiPulse = () => {
+    pulseLoopAi.current?.stop();
+    pulseAnimAi.setValue(1);
+  };
+
+  useSpeechRecognitionEvent('result', (event) => {
+    if (!acceptSpeechResultsAi.current) return;
+    const transcript = event.results[0]?.transcript ?? '';
+    if (!transcript) return;
+    const base = speechBaseTextAi.current;
+    setAiQuestion(base.trim().length === 0 ? transcript : base.trimEnd() + ' ' + transcript);
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    if (!acceptSpeechResultsAi.current) return;
+    console.warn('Speech recognition error:', event.error, event.message);
+    if (event.error !== 'aborted') {
+      Alert.alert('Speech Error', event.message || 'Speech recognition failed. Please try again.');
+    }
+    setIsListeningAi(false);
+    stopAiPulse();
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    if (!acceptSpeechResultsAi.current) return;
+    acceptSpeechResultsAi.current = false;
+    setIsListeningAi(false);
+    stopAiPulse();
+  });
+
+  const toggleAiSpeech = async () => {
+    if (isListeningAi) {
+      acceptSpeechResultsAi.current = false;
+      ExpoSpeechRecognitionModule.stop();
+      setIsListeningAi(false);
+      stopAiPulse();
+      return;
+    }
+
+    const { status } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+
+    if (status !== 'granted') {
+      Alert.alert(
+        'Microphone Permission Required',
+        'Please allow microphone access to use voice input.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+
+    speechBaseTextAi.current = aiQuestion;
+    acceptSpeechResultsAi.current = true;
+    setIsListeningAi(true);
+    startAiPulse();
+    ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false });
+  };
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -433,16 +512,31 @@ export default function Home() {
           <Text style={styles.aiSectionTitle}>AI Support</Text>
           <Text style={styles.aiSectionSubtitle}>Get instant answers to your parenting questions</Text>
           <View style={styles.aiQuestionCard}>
-            <TextInput
-              style={styles.aiQuestionInput}
-              placeholder="Ask me anything about parenting..."
-              placeholderTextColor={currentTheme.mutedForeground}
-              value={aiQuestion}
-              onChangeText={setAiQuestion}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
+            <View style={{ position: 'relative' }}>
+              <TextInput
+                style={[styles.aiQuestionInput, { paddingBottom: 36 }, isListeningAi && { borderColor: currentTheme.primary }]}
+                placeholder={isListeningAi ? 'Listening…' : 'Ask me anything about parenting...'}
+                placeholderTextColor={isListeningAi ? currentTheme.primary : currentTheme.mutedForeground}
+                value={aiQuestion}
+                onChangeText={setAiQuestion}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+              <TouchableOpacity
+                onPress={toggleAiSpeech}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ position: 'absolute', bottom: 20, right: 10 }}
+              >
+                <Animated.View style={{ transform: [{ scale: pulseAnimAi }] }}>
+                  {isListeningAi ? (
+                    <MicOff size={20} color={currentTheme.primary} />
+                  ) : (
+                    <Mic size={20} color={currentTheme.mutedForeground} />
+                  )}
+                </Animated.View>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={styles.aiSubmitButton}
               onPress={() => {
