@@ -95,6 +95,7 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
   const pulseAnim = useRef(new Animated.Value(1)).current
   const pulseLoop = useRef<Animated.CompositeAnimation | null>(null)
   const acceptSpeechResults = useRef(false)
+  const speechBaseText = useRef('')
   
   // Swipe drawer hook for gesture support
   const {
@@ -136,7 +137,8 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
     if (!acceptSpeechResults.current) return
     const transcript = event.results[0]?.transcript ?? ''
     if (!transcript) return
-    setInput(transcript)
+    const base = speechBaseText.current
+    setInput(base.trim().length === 0 ? transcript : base.trimEnd() + ' ' + transcript)
   })
 
   useSpeechRecognitionEvent('error', (event) => {
@@ -173,6 +175,7 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
       return
     }
 
+    speechBaseText.current = input
     setIsListening(true)
     acceptSpeechResults.current = true
     startPulse()
