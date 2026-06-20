@@ -2,21 +2,28 @@ import themes from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { Baby } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AppointmentsTab from './AppointmentsTab';
 import BabyGrowthTab from './BabyGrowthTab';
 import MomWellnessTab from './MomWellnessTab';
 import VaccinationTabNew from './VaccinationTabNew';
 
-type TabType = 'growth' | 'vaccinations' | 'wellness' | 'appointments';
+type Phase = 'preparation' | 'pregnancy' | 'post_delivery';
+type TabType = 'growth' | 'vaccinations' | 'wellness';
 
-const allTabs = [
-  { id: 'growth' as TabType, label: 'Baby Growth', icon: Baby },
-  { id: 'vaccinations' as TabType, label: 'Vaccinations', icon: Baby },
-  { id: 'wellness' as TabType, label: 'Mom Wellness', icon: Baby },
-  { id: 'appointments' as TabType, label: 'Appointments', icon: Baby },
+interface TabConfig {
+  id: TabType;
+  label: string;
+  icon: typeof Baby;
+  /** When provided, only show this tab for the listed phases. Omit to show for all phases. */
+  phases?: Phase[];
+}
+
+const ALL_TABS: TabConfig[] = [
+  { id: 'growth',       label: 'Baby Growth',  icon: Baby, phases: ['post_delivery'] },
+  { id: 'vaccinations', label: 'Vaccinations',  icon: Baby, phases: ['post_delivery'] },
+  { id: 'wellness',     label: 'Mom Wellness',  icon: Baby }, // visible to all phases
 ];
 
 export default function HealthTrackerView() {
@@ -26,8 +33,13 @@ export default function HealthTrackerView() {
   const screenWidth = Dimensions.get('window').width;
   const isTablet = screenWidth > 768;
 
-  // All tabs are available to all users regardless of phase
-  const tabs = allTabs;
+  // Derive visible tabs based on the user's current phase.
+  // A tab without a `phases` array is always shown.
+  // A tab with a `phases` array is only shown when user.phase is in that list.
+  const tabs = useMemo<TabConfig[]>(
+    () => ALL_TABS.filter(tab => !tab.phases || tab.phases.includes(user?.phase as Phase)),
+    [user?.phase]
+  );
 
   // Set initial active tab based on available tabs
   const [activeTab, setActiveTab] = useState<TabType>(tabs[0]?.id || 'wellness');
@@ -48,10 +60,8 @@ export default function HealthTrackerView() {
         return <VaccinationTabNew />;
       case 'wellness':
         return <MomWellnessTab />;
-      case 'appointments':
-        return <AppointmentsTab />;
       default:
-        return <BabyGrowthTab />;
+        return <MomWellnessTab />;
     }
   };
 
@@ -66,7 +76,7 @@ export default function HealthTrackerView() {
           <View style={styles.headerText}>
             <Text style={styles.title}>Growth & Health Tools</Text>
             <Text style={styles.subtitle}>
-              Keep track of important milestones, health data, appointments, and wellness.
+              Keep track of important milestones, health data, and wellness.
             </Text>
           </View>
         </View>
