@@ -1,5 +1,7 @@
 import { fetchAccessToken } from '@/app/utils';
+import { authClient } from '@/app/lib/auth-client';
 import * as SecureStore from 'expo-secure-store';
+import * as Linking from 'expo-linking';
 import React, { createContext, useContext, useEffect, useState } from "react"; // Explicitly import React
 import { Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,22 +16,26 @@ interface AuthContextType {
   session: SessionState | null;
   signin: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, phase: string) => Promise<{ success: boolean; autoLogin: boolean }>;
+  signinWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   user: any;
   selectedChildId: string | null;
   setSelectedChildId: (childId: string | null) => void;
   refreshUser: () => Promise<void>;
+  getApiHeaders: () => Record<string, string>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   session: null,
   signin: async () => { },
   signup: async () => ({ success: false, autoLogin: false }),
+  signinWithGoogle: async () => { },
   logout: async () => { },
   user: null,
   selectedChildId: null,
   setSelectedChildId: () => {},
   refreshUser: async () => {},
+  getApiHeaders: () => ({ 'Content-Type': 'application/json' }),
 });
 
 interface AuthProviderProps {
@@ -75,7 +81,20 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
               } else if (userData?.childId) {
                 // Fallback to old childId field for backward compatibility
                 setSelectedChildId(userData.childId);
-              } else {
+              }
+            } else {
+              // /api/user rejected the token (e.g. Google OAuth session) —
+              // fall back to Better Auth's own session endpoint
+              const { data: sessionData } = await authClient.getSession();
+              if (sessionData?.session?.token) {
+                const userData = sessionData.user as any;
+                setSession({ accessToken: sessionData.session.token });
+                setUser(userData || null);
+                if (userData?.childrenIds && userData.childrenIds.length > 0) {
+                  setSelectedChildId(userData.childrenIds[0]);
+                } else if (userData?.childId) {
+                  setSelectedChildId(userData.childId);
+                }
               }
             }
           } catch (error) {
@@ -226,6 +245,48 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const signinWithGoogle = async () => {
+    setLoading(true);
+    try {
+      const { error } = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: Linking.createURL("/"),
+      });
+
+      if (error) {
+        alert(error.message || 'Google sign-in failed. Please try again.');
+        return;
+      }
+
+      // Retrieve the session token from the Better Auth client
+      const { data: sessionData } = await authClient.getSession();
+
+      if (!sessionData?.session?.token) {
+        alert('Google sign-in failed. Could not retrieve session.');
+        return;
+      }
+
+      const token = sessionData.session.token;
+      await SecureStore.setItemAsync('accessToken', token);
+      setSession({ accessToken: token });
+
+      // Use the user data already returned by getSession() —
+      // avoids a separate /api/user call that may not accept OAuth tokens
+      const userData = sessionData.user as any;
+      setUser(userData || null);
+
+      if (userData?.childrenIds && userData.childrenIds.length > 0) {
+        setSelectedChildId(userData.childrenIds[0]);
+      } else if (userData?.childId) {
+        setSelectedChildId(userData.childId);
+      }
+    } catch (error) {
+      alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = async () => {
     try {
       setLoading(true)
@@ -263,15 +324,31 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const getApiHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (session?.accessToken) {
+      headers['Authorization'] = `Bearer ${session.accessToken}`;
+    }
+    // Include the Better Auth cookie so OAuth sessions work even if the backend
+    // doesn't accept Bearer tokens for OAuth-created sessions
+    const cookie = authClient.getCookie();
+    if (cookie) {
+      headers['Cookie'] = cookie;
+    }
+    return headers;
+  };
+
   const contextData = {
     session,
     signin,
     signup,
+    signinWithGoogle,
     logout,
     user,
     selectedChildId,
     setSelectedChildId,
     refreshUser,
+    getApiHeaders,
   };
 
   return (
