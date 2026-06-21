@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { Calendar as RNCalendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import PregnancyPhaseView from './pregnencyPhaseView';
 import PostDeliveryPhaseView from './postDeliveryPhaseView';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -394,6 +395,10 @@ export default function Home() {
             onOpenHealthTracker={() => router.push('/healthTracker')}
             onOpenAddMeasurement={() => setShowAddModal(true)}
           />
+        )}
+
+        {user?.phase === 'pregnancy' && (
+          <PregnancyPhaseView currentTheme={currentTheme} />
         )}
 
         {/* AI Question Section */}
