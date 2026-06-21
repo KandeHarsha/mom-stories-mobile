@@ -1,8 +1,9 @@
 import FullScreenQuestionnaire, { QuestionConfig } from '@/app/components/FullScreenQuestionnaire';
+import { sizeComparisionOfBabyByWeek } from '@/app/utils';
 import { useAuth } from '@/context/AuthContext';
-import { Baby, CalendarHeart } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Baby, Calendar, CalendarHeart, Heart, Ruler } from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -12,12 +13,71 @@ interface PregnancyPhaseViewProps {
 
 type PregnancyType = 'singleton' | 'twins' | 'triplets';
 
+interface PregnancyData {
+	id: string;
+	calculationMethod?: string;
+	dueDate?: string;
+	lmpDate?: string;
+	cycleLengthDays?: number;
+	babyNickname?: string;
+	pregnancyType?: PregnancyType;
+	status?: string;
+}
+
+const calculateGestationalWeeks = (pregnancy: PregnancyData | null) => {
+	if (!pregnancy) return 0;
+	const today = new Date();
+
+	if (pregnancy.lmpDate) {
+		const lmp = new Date(pregnancy.lmpDate);
+		const diffMs = today.getTime() - lmp.getTime();
+		return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7)));
+	}
+
+	if (pregnancy.dueDate) {
+		const due = new Date(pregnancy.dueDate);
+		const weeksLeft = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 7));
+		return Math.max(0, 40 - weeksLeft);
+	}
+
+	return 0;
+};
+
 export default function PregnancyPhaseView({ currentTheme }: PregnancyPhaseViewProps) {
 	const { user, session, refreshUser } = useAuth();
 	const [showQuestionnaire, setShowQuestionnaire] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [pregnancyData, setPregnancyData] = useState<PregnancyData | null>(null);
+	const [loadingPregnancyData, setLoadingPregnancyData] = useState(false);
 
 	const styles = useMemo(() => createStyles(currentTheme), [currentTheme]);
+
+	useEffect(() => {
+		const fetchPregnancyData = async () => {
+			if (!user?.pregnancyId || !session?.accessToken) return;
+
+			setLoadingPregnancyData(true);
+			try {
+				const response = await fetch(`${API_BASE_URL}/pregnancy/${user.pregnancyId}`, {
+					headers: {
+						Authorization: `Bearer ${session.accessToken}`,
+						'Content-Type': 'application/json',
+					},
+				});
+
+				if (response.ok) {
+					const responseData = await response.json();
+					setPregnancyData(responseData.pregnancy || responseData);
+				}
+			} catch (error) {
+				console.error('Failed to fetch pregnancy data:', error);
+			} finally {
+				setLoadingPregnancyData(false);
+			}
+		};
+
+		fetchPregnancyData();
+	}, [user?.pregnancyId, session?.accessToken]);
 
 	const questions: QuestionConfig[] = useMemo(
 		() => [
@@ -150,16 +210,81 @@ export default function PregnancyPhaseView({ currentTheme }: PregnancyPhaseViewP
 	};
 
 	if (user?.pregnancyId) {
+		if (loadingPregnancyData) {
+			return (
+				<View style={styles.journeyCard}>
+					<ActivityIndicator size="large" color={currentTheme.primary} />
+				</View>
+			);
+		}
+
+		const week = calculateGestationalWeeks(pregnancyData);
+		const normalizedWeek = Math.min(40, Math.max(4, week));
+		const trimester = normalizedWeek <= 12 ? 1 : normalizedWeek <= 27 ? 2 : 3;
+		const sizeComparison =
+			sizeComparisionOfBabyByWeek[
+				normalizedWeek as keyof typeof sizeComparisionOfBabyByWeek
+			] || 'growing beautifully';
+		const progressPercent = Math.min(100, Math.max(0, (normalizedWeek / 40) * 100));
+		const daysToDueDate = pregnancyData?.dueDate
+			? Math.max(
+					0,
+					Math.ceil((new Date(pregnancyData.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+			  )
+			: null;
+
 		return (
 			<View style={styles.journeyCard}>
 				<View style={styles.journeyHeader}>
 					<View style={styles.iconWrap}>
-						<Baby size={28} color={currentTheme.primary} />
+						<Baby size={30} color={currentTheme.primary} />
 					</View>
 					<View style={styles.journeyHeaderTextWrap}>
-						<Text style={styles.journeyTitle}>Pregnancy Journey Active</Text>
-						<Text style={styles.journeySubtitle}>Your pregnancy plan is ready and being tracked.</Text>
+						<Text style={styles.journeyTitle}>
+							{pregnancyData?.babyNickname
+								? `${pregnancyData.babyNickname}'s Journey`
+								: 'Pregnancy Journey Active'}
+						</Text>
+						<Text style={styles.journeySubtitle}>Trimester {trimester} • Week {normalizedWeek}</Text>
 					</View>
+					<Heart size={20} color={currentTheme.destructive} fill={currentTheme.destructive} />
+				</View>
+
+				<View style={styles.progressTrack}>
+					<View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+				</View>
+				<View style={styles.progressMetaRow}>
+					<Text style={styles.progressMetaText}>Week {normalizedWeek} of 40</Text>
+					<Text style={styles.progressMetaText}>{Math.round(progressPercent)}%</Text>
+				</View>
+
+				<View style={styles.sizeCard}>
+					<View style={styles.sizeIconWrap}>
+						<Ruler size={20} color={currentTheme.primary} />
+					</View>
+					<View style={styles.sizeTextWrap}>
+						<Text style={styles.sizeTitle}>Baby is the size of a</Text>
+						<Text style={styles.sizeValue}>{sizeComparison}</Text>
+					</View>
+				</View>
+
+				<View style={styles.infoRow}>
+					{daysToDueDate !== null ? (
+						<View style={styles.infoItem}>
+							<Calendar size={16} color={currentTheme.mutedForeground} />
+							<Text style={styles.infoValue}>{daysToDueDate}</Text>
+							<Text style={styles.infoLabel}>days to due date</Text>
+						</View>
+					) : null}
+					{pregnancyData?.pregnancyType ? (
+						<View style={styles.infoItem}>
+							<Baby size={16} color={currentTheme.mutedForeground} />
+							<Text style={styles.infoValue}>
+								{pregnancyData.pregnancyType.charAt(0).toUpperCase() + pregnancyData.pregnancyType.slice(1)}
+							</Text>
+							<Text style={styles.infoLabel}>pregnancy type</Text>
+						</View>
+					) : null}
 				</View>
 			</View>
 		);
@@ -263,7 +388,7 @@ const createStyles = (theme: any) =>
 		journeyHeader: {
 			flexDirection: 'row',
 			alignItems: 'center',
-			gap: 12,
+			marginBottom: 14,
 		},
 		iconWrap: {
 			width: 50,
@@ -275,6 +400,7 @@ const createStyles = (theme: any) =>
 		},
 		journeyHeaderTextWrap: {
 			flex: 1,
+			marginLeft: 12,
 		},
 		journeyTitle: {
 			color: theme.cardForeground,
@@ -285,5 +411,75 @@ const createStyles = (theme: any) =>
 		journeySubtitle: {
 			color: theme.mutedForeground,
 			fontSize: 14,
+		},
+		progressTrack: {
+			height: 8,
+			backgroundColor: theme.border,
+			borderRadius: 999,
+			overflow: 'hidden',
+			marginBottom: 6,
+		},
+		progressFill: {
+			height: '100%',
+			backgroundColor: theme.primary,
+			borderRadius: 999,
+		},
+		progressMetaRow: {
+			flexDirection: 'row',
+			justifyContent: 'space-between',
+			marginBottom: 14,
+		},
+		progressMetaText: {
+			fontSize: 12,
+			color: theme.mutedForeground,
+		},
+		sizeCard: {
+			flexDirection: 'row',
+			alignItems: 'center',
+			backgroundColor: theme.primary + '12',
+			paddingHorizontal: 14,
+			paddingVertical: 12,
+			borderRadius: 12,
+			marginBottom: 14,
+		},
+		sizeIconWrap: {
+			width: 38,
+			height: 38,
+			borderRadius: 19,
+			backgroundColor: theme.primary + '24',
+			justifyContent: 'center',
+			alignItems: 'center',
+			marginRight: 10,
+		},
+		sizeTextWrap: {
+			flex: 1,
+		},
+		sizeTitle: {
+			fontSize: 12,
+			color: theme.mutedForeground,
+			marginBottom: 2,
+		},
+		sizeValue: {
+			fontSize: 18,
+			fontWeight: '700',
+			color: theme.primary,
+			textTransform: 'capitalize',
+		},
+		infoRow: {
+			flexDirection: 'row',
+			justifyContent: 'space-around',
+		},
+		infoItem: {
+			alignItems: 'center',
+			gap: 4,
+		},
+		infoValue: {
+			fontSize: 16,
+			fontWeight: '700',
+			color: theme.cardForeground,
+		},
+		infoLabel: {
+			fontSize: 12,
+			color: theme.mutedForeground,
 		},
 	});
