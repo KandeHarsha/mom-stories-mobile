@@ -75,6 +75,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="journal/[entryId]" options={{ headerShown: false }} />
       <Stack.Screen name="profile/customerSupport" options={{ headerShown: false }} />
+      <Stack.Screen name="profile/accountSettings" options={{ headerShown: false }} />
       <Stack.Screen name="medications/index" options={{ headerShown: false }} />
       <Stack.Screen name="appointments/index" options={{ headerShown: false }} />
     </Stack>
