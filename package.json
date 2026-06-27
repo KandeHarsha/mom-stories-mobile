@@ -1,7 +1,7 @@
 {
   "name": "mom-stories-mobile",
   "main": "expo-router/entry",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "scripts": {
     "start": "expo start",
     "dev": "cross-env APP_VARIANT=development npx expo start",

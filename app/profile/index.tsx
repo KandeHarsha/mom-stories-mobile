@@ -210,7 +210,7 @@ const ProfileScreen = () => {
       title: 'Account Settings',
       subtitle: 'Manage your account information',
       icon: Settings,
-      onPress: () => Alert.alert('Coming Soon', 'Account settings will be available soon')
+      onPress: () => router.push('/profile/accountSettings' as any)
     },
     {
       id: 'privacy',
