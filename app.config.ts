@@ -62,6 +62,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     }
   },
   "android": {
+    "jsEngine": "hermes",
     "icon": "./assets/images/icon.png",
     "adaptiveIcon": {
       "backgroundColor": "#E6F4FE",
@@ -104,6 +105,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       }
     ],
     "expo-web-browser",
+    "expo-font",
     [
       "expo-notifications",
       {
