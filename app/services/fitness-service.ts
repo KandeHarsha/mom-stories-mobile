@@ -1,6 +1,5 @@
 import Healthkit, {
-    HKQuantityTypeIdentifier,
-    HKStatisticsOptions,
+    type QuantityTypeIdentifier,
 } from '@kingstinct/react-native-healthkit';
 import { Platform } from 'react-native';
 
@@ -35,40 +34,40 @@ export const isHealthKitAvailable = (): boolean => Platform.OS === 'ios';
 export const requestHealthKitPermissions = async (): Promise<boolean> => {
   if (!isHealthKitAvailable()) return false;
   try {
-    await Healthkit.requestAuthorization([
-      HKQuantityTypeIdentifier.stepCount,
-      HKQuantityTypeIdentifier.flightsClimbed,
-      HKQuantityTypeIdentifier.activeEnergyBurned,
-    ]);
-    return true;
-  } catch {
+    return await Healthkit.requestAuthorization({
+      toRead: [
+        'HKQuantityTypeIdentifierStepCount',
+        'HKQuantityTypeIdentifierFlightsClimbed',
+        'HKQuantityTypeIdentifierActiveEnergyBurned',
+      ],
+    });
+  } catch (error) {
+    console.warn('[fitness-service] requestHealthKitPermissions failed', error);
     return false;
   }
 };
 
 /**
- * Query a daily sum for a HKQuantityTypeIdentifier over a date range.
+ * Query a daily sum for a QuantityTypeIdentifier over a date range.
  * Returns a map of 'YYYY-MM-DD' → numeric value.
  */
 const queryDailySums = async (
-  identifier: HKQuantityTypeIdentifier,
+  identifier: QuantityTypeIdentifier,
   unit: string,
   startDate: Date,
   endDate: Date,
 ): Promise<Record<string, number>> => {
-  const results = await Healthkit.queryStatisticsCollection(
+  const results = await Healthkit.queryStatisticsCollectionForQuantity(
     identifier,
-    {
-      anchorDate: startDate,
-      intervalComponents: { day: 1 },
-    },
+    ['cumulativeSum'],
     startDate,
-    endDate,
-    HKStatisticsOptions.cumulativeSum,
+    { day: 1 },
+    { unit, filter: { date: { startDate, endDate } } },
   );
 
   const map: Record<string, number> = {};
   for (const stat of results) {
+    if (!stat.startDate) continue;
     const dateKey = stat.startDate.toISOString().split('T')[0];
     map[dateKey] = stat.sumQuantity?.quantity ?? 0;
   }
@@ -91,19 +90,19 @@ export const fetchHealthKitData = async (
 
   const [stepsMap, stairsMap, caloriesMap] = await Promise.all([
     queryDailySums(
-      HKQuantityTypeIdentifier.stepCount,
+      'HKQuantityTypeIdentifierStepCount',
       'count',
       startDate,
       endDate,
     ),
     queryDailySums(
-      HKQuantityTypeIdentifier.flightsClimbed,
+      'HKQuantityTypeIdentifierFlightsClimbed',
       'count',
       startDate,
       endDate,
     ),
     queryDailySums(
-      HKQuantityTypeIdentifier.activeEnergyBurned,
+      'HKQuantityTypeIdentifierActiveEnergyBurned',
       'kcal',
       startDate,
       endDate,
