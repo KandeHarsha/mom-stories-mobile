@@ -6,11 +6,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BabyGrowthTab from './BabyGrowthTab';
+import FitnessTab from './fitness';
 import MomWellnessTab from './MomWellnessTab';
 import VaccinationTabNew from './VaccinationTabNew';
 
 type Phase = 'preparation' | 'pregnancy' | 'post_delivery';
-type TabType = 'growth' | 'vaccinations' | 'wellness';
+type TabType = 'growth' | 'vaccinations' | 'wellness' | 'fitness';
 
 interface TabConfig {
   id: TabType;
@@ -24,6 +25,7 @@ const ALL_TABS: TabConfig[] = [
   { id: 'growth',       label: 'Baby Growth',  icon: Baby, phases: ['post_delivery'] },
   { id: 'vaccinations', label: 'Vaccinations',  icon: Baby, phases: ['post_delivery'] },
   { id: 'wellness',     label: 'Mom Wellness',  icon: Baby }, // visible to all phases
+  { id: 'fitness',      label: 'Fitness',       icon: Baby }, // visible to all phases
 ];
 
 export default function HealthTrackerView() {
@@ -60,6 +62,8 @@ export default function HealthTrackerView() {
         return <VaccinationTabNew />;
       case 'wellness':
         return <MomWellnessTab />;
+      case 'fitness':
+        return <FitnessTab />;
       default:
         return <MomWellnessTab />;
     }

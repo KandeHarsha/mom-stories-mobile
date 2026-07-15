@@ -104,6 +104,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         }
       }
     ],
+    "@kingstinct/react-native-healthkit",
     "expo-web-browser",
     "expo-font",
     [
