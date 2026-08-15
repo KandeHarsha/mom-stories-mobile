@@ -113,6 +113,26 @@ export default function Login() {
             <Text style={{ color: currentTheme.primary }}>Register</Text>
           </Text>
         </TouchableOpacity>
+        <Text
+          className="mt-6 px-2 text-xs text-center w-4/5"
+          style={{ color: currentTheme.mutedForeground }}
+        >
+          By continuing, you agree to our{" "}
+          <Text
+            style={{ color: currentTheme.primary }}
+            onPress={() => router.push("/legal/terms")}
+          >
+            Terms of Use
+          </Text>{" "}
+          and{" "}
+          <Text
+            style={{ color: currentTheme.primary }}
+            onPress={() => router.push("/legal/privacy")}
+          >
+            Privacy Policy
+          </Text>
+          .
+        </Text>
       </View>
     </View>
   );

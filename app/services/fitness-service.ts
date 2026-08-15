@@ -5,6 +5,10 @@ import { Platform } from 'react-native';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
+export const DEFAULT_STEP_GOAL = 7000;
+export const MIN_STEP_GOAL = 1000;
+export const MAX_STEP_GOAL = 100000;
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export interface FitnessDataPoint {
@@ -20,9 +24,23 @@ export interface FitnessSyncPayload {
 
 export interface FitnessHistoryResponse {
   data: FitnessDataPoint[];
+  stepGoal: number;
 }
 
 // ─── HealthKit helpers ──────────────────────────────────────────────────────
+
+/**
+ * Formats a Date as a 'YYYY-MM-DD' key using its *local* calendar day.
+ * `toISOString()` converts to UTC first, which shifts the date backward
+ * for any timezone ahead of UTC — use this instead when the Date already
+ * represents local midnight or a local-day boundary.
+ */
+const toLocalDateKey = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 /** Returns true only on iOS devices where HealthKit is available */
 export const isHealthKitAvailable = (): boolean => Platform.OS === 'ios';
@@ -68,7 +86,7 @@ const queryDailySums = async (
   const map: Record<string, number> = {};
   for (const stat of results) {
     if (!stat.startDate) continue;
-    const dateKey = stat.startDate.toISOString().split('T')[0];
+    const dateKey = toLocalDateKey(stat.startDate);
     map[dateKey] = stat.sumQuantity?.quantity ?? 0;
   }
   return map;
@@ -113,7 +131,7 @@ export const fetchHealthKitData = async (
   const cursor = new Date(startDate);
 
   while (cursor <= endDate) {
-    const dateKey = cursor.toISOString().split('T')[0];
+    const dateKey = toLocalDateKey(cursor);
     dataPoints.push({
       date: dateKey,
       steps: Math.round(stepsMap[dateKey] ?? 0),
@@ -127,15 +145,16 @@ export const fetchHealthKitData = async (
 };
 
 // ─── Backend API calls ──────────────────────────────────────────────────────
+// Fitness sync is currently iOS/HealthKit only — Android is handled separately.
 
 /**
- * POST /fitness/sync — upsert fitness data points for the authenticated user.
+ * POST /fitness/ios — upsert fitness data points for the authenticated user.
  */
 export const syncFitnessData = async (
   token: string,
   data: FitnessDataPoint[],
 ): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/fitness/sync`, {
+  const response = await fetch(`${API_BASE_URL}/fitness/ios`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -150,13 +169,14 @@ export const syncFitnessData = async (
 };
 
 /**
- * GET /fitness?days=7 — fetch fitness history for the authenticated user.
+ * GET /fitness/ios?days=7 — fetch fitness history and step goal for the
+ * authenticated user.
  */
 export const getFitnessHistory = async (
   token: string,
   days: number = 7,
-): Promise<FitnessDataPoint[]> => {
-  const response = await fetch(`${API_BASE_URL}/fitness?days=${days}`, {
+): Promise<FitnessHistoryResponse> => {
+  const response = await fetch(`${API_BASE_URL}/fitness/ios?days=${days}`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -167,6 +187,26 @@ export const getFitnessHistory = async (
     throw new Error('Failed to fetch fitness history');
   }
 
-  const json: FitnessHistoryResponse = await response.json();
-  return json.data;
+  return response.json();
+};
+
+/**
+ * PUT /fitness/ios — update the authenticated user's daily step goal.
+ */
+export const updateStepGoal = async (
+  token: string,
+  stepGoal: number,
+): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/fitness/ios`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ stepGoal }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to update step goal');
+  }
 };

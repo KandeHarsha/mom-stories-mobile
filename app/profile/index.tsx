@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext'
 import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
 import * as Updates from 'expo-updates'
-import { Baby, ChevronRight, Download, HelpCircle, LogIn, LogOut, RefreshCw, Settings, Shield, User } from 'lucide-react-native'
+import { Baby, ChevronRight, Download, FileText, HelpCircle, LogIn, LogOut, RefreshCw, Settings, Shield, User } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useState } from 'react'
 import {
@@ -225,6 +225,20 @@ const ProfileScreen = () => {
       subtitle: 'Get help and contact support',
       icon: HelpCircle,
       onPress: () => router.push('/profile/customerSupport')
+    },
+    {
+      id: 'terms',
+      title: 'Terms of Use',
+      subtitle: 'Read the terms for using Mom Stories',
+      icon: FileText,
+      onPress: () => router.push('/legal/terms')
+    },
+    {
+      id: 'privacy-policy',
+      title: 'Privacy Policy',
+      subtitle: 'Learn how we handle your data',
+      icon: FileText,
+      onPress: () => router.push('/legal/privacy')
     }
   ]
 

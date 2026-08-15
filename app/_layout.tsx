@@ -78,6 +78,7 @@ function RootLayoutNav() {
       <Stack.Screen name="profile/accountSettings" options={{ headerShown: false }} />
       <Stack.Screen name="medications/index" options={{ headerShown: false }} />
       <Stack.Screen name="appointments/index" options={{ headerShown: false }} />
+      <Stack.Screen name="legal/[doc]" options={{ headerShown: false }} />
     </Stack>
   );
 }

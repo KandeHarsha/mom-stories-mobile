@@ -1,21 +1,30 @@
 import {
+    DEFAULT_STEP_GOAL,
+    MAX_STEP_GOAL,
+    MIN_STEP_GOAL,
     fetchHealthKitData,
     getFitnessHistory,
     isHealthKitAvailable,
     requestHealthKitPermissions,
     syncFitnessData,
+    updateStepGoal,
     type FitnessDataPoint,
 } from '@/app/services/fitness-service';
 import { fetchAccessToken } from '@/app/utils';
 import themes from '@/constants/colors';
-import { Activity, Flame, Footprints, TrendingUp } from 'lucide-react-native';
+import { Activity, Flame, Footprints, Pencil, TrendingUp, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -46,9 +55,14 @@ export default function FitnessTab() {
   const styles = createStyles(currentTheme);
 
   const [data, setData] = useState<FitnessDataPoint[]>([]);
+  const [stepGoal, setStepGoal] = useState(DEFAULT_STEP_GOAL);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [healthKitDenied, setHealthKitDenied] = useState(false);
+
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
+  const [savingGoal, setSavingGoal] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,7 +75,8 @@ export default function FitnessTab() {
         // On Android or simulator — fall back to backend history
         if (token) {
           const history = await getFitnessHistory(token, DAYS);
-          setData(history);
+          setData(history.data);
+          setStepGoal(history.stepGoal);
         }
         setLoading(false);
         return;
@@ -77,11 +92,18 @@ export default function FitnessTab() {
       const points = await fetchHealthKitData(DAYS);
       setData(points);
 
-      // Sync to backend in background — don't block UI
       if (token) {
+        // Sync to backend in background — don't block UI
         syncFitnessData(token, points).catch(() => {
           // Non-critical: sync failure shouldn't break the UI
         });
+
+        // Fetch the persisted step goal — HealthKit has no concept of goals
+        getFitnessHistory(token, DAYS)
+          .then(history => setStepGoal(history.stepGoal))
+          .catch(() => {
+            // Non-critical: fall back to the last known/default goal
+          });
       }
     } catch (err) {
       setError('Failed to load fitness data. Please try again.');
@@ -94,9 +116,39 @@ export default function FitnessTab() {
     load();
   }, [load]);
 
+  const openGoalModal = () => {
+    setGoalInput(String(stepGoal));
+    setShowGoalModal(true);
+  };
+
+  const handleSaveGoal = async () => {
+    const parsed = parseInt(goalInput, 10);
+    if (!Number.isInteger(parsed) || parsed < MIN_STEP_GOAL || parsed > MAX_STEP_GOAL) {
+      Alert.alert(
+        'Invalid Goal',
+        `Please enter a step goal between ${MIN_STEP_GOAL.toLocaleString()} and ${MAX_STEP_GOAL.toLocaleString()}.`,
+      );
+      return;
+    }
+
+    setSavingGoal(true);
+    try {
+      const token = await fetchAccessToken();
+      if (!token) throw new Error('Not authenticated');
+      await updateStepGoal(token, parsed);
+      setStepGoal(parsed);
+      setShowGoalModal(false);
+    } catch {
+      Alert.alert('Error', 'Failed to update step goal. Please try again.');
+    } finally {
+      setSavingGoal(false);
+    }
+  };
+
   const today = data.find(d => {
-    const today = new Date().toISOString().split('T')[0];
-    return d.date === today;
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return d.date === todayKey;
   }) ?? { steps: 0, stairsClimbed: 0, caloriesBurned: 0, date: '' };
 
   const weeklySteps = data.reduce((sum, d) => sum + d.steps, 0);
@@ -180,6 +232,33 @@ export default function FitnessTab() {
             <Text style={styles.summaryLabel}>kcal</Text>
           </View>
         </View>
+
+        {/* Step Goal */}
+        <View style={styles.goalRow}>
+          <View style={styles.goalInfo}>
+            <Text style={styles.goalText}>
+              {today.steps.toLocaleString()} / {stepGoal.toLocaleString()} steps
+            </Text>
+            <View style={styles.goalProgressTrack}>
+              <View
+                style={[
+                  styles.goalProgressFill,
+                  {
+                    width: `${Math.min(100, (today.steps / stepGoal) * 100)}%`,
+                    backgroundColor: currentTheme.primary,
+                  },
+                ]}
+              />
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[styles.goalEditButton, { backgroundColor: currentTheme.muted }]}
+            onPress={openGoalModal}
+            accessibilityLabel="Edit step goal"
+          >
+            <Pencil size={16} color={currentTheme.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* 7-Day Breakdown Card */}
@@ -261,9 +340,9 @@ export default function FitnessTab() {
               👟 Step Goal
             </Text>
             <Text style={[styles.insightText, { color: currentTheme.mutedForeground }]}>
-              {weeklySteps >= 70000
-                ? `Excellent! You hit 10k steps every day this week (${weeklySteps.toLocaleString()} total).`
-                : `You walked ${weeklySteps.toLocaleString()} steps this week. Aim for 10,000 steps per day for best results.`}
+              {weeklySteps >= stepGoal * 7
+                ? `Excellent! You hit your ${stepGoal.toLocaleString()}-step goal every day this week (${weeklySteps.toLocaleString()} total).`
+                : `You walked ${weeklySteps.toLocaleString()} steps this week. Aim for ${stepGoal.toLocaleString()} steps per day for best results.`}
             </Text>
           </View>
 
@@ -277,6 +356,74 @@ export default function FitnessTab() {
           </View>
         </View>
       </View>
+
+      {/* Edit Step Goal Modal */}
+      <Modal
+        visible={showGoalModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowGoalModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowGoalModal(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.modalContent}
+            >
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHeaderContent}>
+                  <Footprints size={24} color={currentTheme.primary} />
+                  <Text style={styles.modalTitle}>Edit Step Goal</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowGoalModal(false)}>
+                  <X size={24} color={currentTheme.foreground} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formContainer}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Daily Step Goal</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={`e.g., ${DEFAULT_STEP_GOAL}`}
+                    value={goalInput}
+                    onChangeText={setGoalInput}
+                    keyboardType="number-pad"
+                    placeholderTextColor={currentTheme.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setShowGoalModal(false)}
+                    disabled={savingGoal}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.submitButton, savingGoal && styles.submitButtonDisabled]}
+                    onPress={handleSaveGoal}
+                    disabled={savingGoal}
+                  >
+                    <Text style={styles.submitButtonText}>
+                      {savingGoal ? 'Saving...' : 'Save Goal'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
     </ScrollView>
   );
 }
@@ -380,6 +527,38 @@ const createStyles = (theme: any) =>
       fontSize: 12,
       color: theme.mutedForeground,
     },
+    goalRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginTop: 16,
+    },
+    goalInfo: {
+      flex: 1,
+      gap: 6,
+    },
+    goalText: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: theme.cardForeground,
+    },
+    goalProgressTrack: {
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: theme.muted,
+      overflow: 'hidden',
+    },
+    goalProgressFill: {
+      height: '100%',
+      borderRadius: 3,
+    },
+    goalEditButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     dataContainer: {
       gap: 2,
     },
@@ -459,5 +638,90 @@ const createStyles = (theme: any) =>
     insightText: {
       fontSize: 13,
       lineHeight: 20,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: theme.background,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingBottom: 20,
+      maxHeight: '90%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+    },
+    modalHeaderContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: theme.foreground,
+    },
+    formContainer: {
+      padding: 20,
+    },
+    inputGroup: {
+      marginBottom: 20,
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.foreground,
+      marginBottom: 8,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      fontSize: 16,
+      backgroundColor: theme.card,
+      color: theme.cardForeground,
+    },
+    modalActions: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 4,
+    },
+    cancelButton: {
+      flex: 1,
+      backgroundColor: theme.muted,
+      paddingVertical: 14,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    cancelButtonText: {
+      color: theme.foreground,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    submitButton: {
+      flex: 1,
+      backgroundColor: theme.primary,
+      paddingVertical: 14,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    submitButtonDisabled: {
+      opacity: 0.5,
+    },
+    submitButtonText: {
+      color: theme.primaryForeground,
+      fontSize: 16,
+      fontWeight: '600',
     },
   });
