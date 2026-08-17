@@ -65,8 +65,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "jsEngine": "hermes",
     "icon": "./assets/images/icon.png",
     "adaptiveIcon": {
-      "backgroundColor": "#E6F4FE",
-      "foregroundImage": "./assets/images/icon.png"
+      "backgroundColor": "#F0ECE0",
+      "foregroundImage": "./assets/images/adaptive-icon.png",
+      "monochromeImage": "./assets/images/android-icon-monochrome.png"
     },
     "edgeToEdgeEnabled": true,
     "predictiveBackGestureEnabled": false,
@@ -74,7 +75,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "googleServicesFile": "./google-services.json",
     "permissions": [
       "POST_NOTIFICATIONS",
-      "RECORD_AUDIO"
+      "RECORD_AUDIO",
+      "android.permission.health.READ_STEPS",
+      "android.permission.health.READ_FLOORS_CLIMBED",
+      "android.permission.health.READ_ACTIVE_CALORIES_BURNED"
     ]
   },
   "web": {
@@ -89,9 +93,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         "ios": {
           "deploymentTarget": "15.1"
+        },
+        "android": {
+          "minSdkVersion": 26
         }
       }
     ],
+    "react-native-health-connect",
     [
       "expo-splash-screen",
       {

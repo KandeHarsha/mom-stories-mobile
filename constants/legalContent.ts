@@ -33,7 +33,7 @@ You agree not to:
 • Use automated means (scraping, bots) to access the App without our permission.
 
 6. Third-Party Services and Integrations
-The App may integrate with third-party services to provide certain features, including Apple HealthKit (for step, flight-climbed, and active-energy data on iOS), push notification delivery, error/crash monitoring, and cloud hosting and storage providers. Your use of those integrations is also subject to the relevant third party's own terms, where applicable. See our Privacy Policy for details on what we share with these providers.
+The App may integrate with third-party services to provide certain features, including Apple HealthKit (for step, flight-climbed, and active-energy data on iOS), Android Health Connect (for step, floors-climbed, and active-calories data on Android), push notification delivery, error/crash monitoring, and cloud hosting and storage providers. Your use of those integrations is also subject to the relevant third party's own terms, where applicable. See our Privacy Policy for details on what we share with these providers.
 
 7. Intellectual Property
 The App, including its design, graphics, logos, and underlying software, is owned by us or our licensors and is protected by intellectual property laws. Except for Your Content, you may not copy, modify, distribute, sell, or lease any part of the App without our prior written consent.
@@ -69,7 +69,7 @@ Health and wellness information you provide: Depending on which features you use
 • Journal entries, including titles, text, categories, tags, photos, and voice recordings;
 • Messages you send to the AI Support feature, and any responses you choose to save.
 
-Apple HealthKit data (iOS only): If you grant permission, we read step count, flights climbed, and active energy (calories) data from Apple Health so we can display and sync your activity in the App. We do not write data back to Apple Health, and we do not access other Health app categories (such as heart rate or sleep) unless a future version of the App discloses otherwise.
+Health data from your device (Apple Health on iOS, Health Connect on Android): If you grant permission, we read step count, flights/floors climbed, and active energy (calories) data from Apple Health or Android Health Connect so we can display and sync your activity in the App. We do not write data back to Apple Health or Health Connect, and we do not access other health data categories (such as heart rate or sleep) unless a future version of the App discloses otherwise.
 
 Voice input: If you use voice dictation in Journal or AI Support, your device's built-in speech-recognition service converts your speech to text on-device or via your device operating system; we receive and store the resulting text, not a raw audio recording, for that purpose.
 
@@ -111,7 +111,7 @@ Your authentication session is stored securely on your device using your operati
 
 5. Your Choices and Rights
 • Access and correction: You can view and update certain account information (name, phase) from Account Settings. Your email address cannot be changed for security reasons.
-• Health data permissions: You can grant or revoke the App's access to Apple Health at any time through your device's Settings app.
+• Health data permissions: You can grant or revoke the App's access to Apple Health (iOS) or Health Connect (Android) at any time through your device's Settings app.
 • Notifications: You can disable push notifications at any time through your device settings.
 • Deletion: The App does not currently include a self-service "delete account" button. To request deletion of your account or personal data, or to request a copy of your data, contact us ${SUPPORT_CONTACT_NOTE}, and we will respond within a reasonable time and in accordance with applicable law.
 • Depending on where you live, you may have additional rights under laws such as the GDPR or CCPA/CPRA, including the right to access, correct, delete, or restrict processing of your personal information, and the right to lodge a complaint with a supervisory authority. To exercise these rights, contact us as described above.

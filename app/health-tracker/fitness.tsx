@@ -2,10 +2,13 @@ import {
     DEFAULT_STEP_GOAL,
     MAX_STEP_GOAL,
     MIN_STEP_GOAL,
-    fetchHealthKitData,
+    fetchDeviceHealthData,
     getFitnessHistory,
+    isDeviceHealthDataAvailable,
+    isHealthConnectAvailable,
+    isHealthConnectSdkAvailable,
     isHealthKitAvailable,
-    requestHealthKitPermissions,
+    requestDeviceHealthPermissions,
     syncFitnessData,
     updateStepGoal,
     type FitnessDataPoint,
@@ -58,7 +61,8 @@ export default function FitnessTab() {
   const [stepGoal, setStepGoal] = useState(DEFAULT_STEP_GOAL);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [healthKitDenied, setHealthKitDenied] = useState(false);
+  const [healthAccessDenied, setHealthAccessDenied] = useState(false);
+  const [healthConnectUnavailable, setHealthConnectUnavailable] = useState(false);
 
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
@@ -67,12 +71,14 @@ export default function FitnessTab() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setHealthAccessDenied(false);
+    setHealthConnectUnavailable(false);
 
     try {
       const token = await fetchAccessToken();
 
-      if (!isHealthKitAvailable()) {
-        // On Android or simulator — fall back to backend history
+      if (!isDeviceHealthDataAvailable()) {
+        // No on-device source for this platform — fall back to backend history
         if (token) {
           const history = await getFitnessHistory(token, DAYS);
           setData(history.data);
@@ -82,14 +88,23 @@ export default function FitnessTab() {
         return;
       }
 
-      const granted = await requestHealthKitPermissions();
+      if (isHealthConnectAvailable()) {
+        const sdkReady = await isHealthConnectSdkAvailable();
+        if (!sdkReady) {
+          setHealthConnectUnavailable(true);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const granted = await requestDeviceHealthPermissions();
       if (!granted) {
-        setHealthKitDenied(true);
+        setHealthAccessDenied(true);
         setLoading(false);
         return;
       }
 
-      const points = await fetchHealthKitData(DAYS);
+      const points = await fetchDeviceHealthData(DAYS);
       setData(points);
 
       if (token) {
@@ -98,7 +113,7 @@ export default function FitnessTab() {
           // Non-critical: sync failure shouldn't break the UI
         });
 
-        // Fetch the persisted step goal — HealthKit has no concept of goals
+        // Fetch the persisted step goal — on-device sources have no concept of goals
         getFitnessHistory(token, DAYS)
           .then(history => setStepGoal(history.stepGoal))
           .catch(() => {
@@ -162,14 +177,31 @@ export default function FitnessTab() {
     );
   }
 
-  if (healthKitDenied) {
+  if (healthConnectUnavailable) {
+    return (
+      <View style={styles.centered}>
+        <Activity size={48} color={currentTheme.mutedForeground} />
+        <Text style={styles.emptyTitle}>Health Connect Required</Text>
+        <Text style={styles.emptySubtitle}>
+          Install the Health Connect app from the Play Store to sync your steps,
+          floors climbed, and active calories, then come back and retry.
+        </Text>
+        <TouchableOpacity style={styles.retryButton} onPress={load}>
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (healthAccessDenied) {
     return (
       <View style={styles.centered}>
         <Activity size={48} color={currentTheme.mutedForeground} />
         <Text style={styles.emptyTitle}>Health Access Denied</Text>
         <Text style={styles.emptySubtitle}>
-          Go to Settings → Health → Mom Stories and allow read access to Steps,
-          Flights Climbed, and Active Energy.
+          {isHealthKitAvailable()
+            ? 'Go to Settings → Health → Mom Stories and allow read access to Steps, Flights Climbed, and Active Energy.'
+            : 'Open Health Connect and allow Mom Stories read access to Steps, Floors Climbed, and Active Calories Burned.'}
         </Text>
       </View>
     );
@@ -186,13 +218,13 @@ export default function FitnessTab() {
     );
   }
 
-  if (!isHealthKitAvailable() && data.length === 0) {
+  if (!isDeviceHealthDataAvailable() && data.length === 0) {
     return (
       <View style={styles.centered}>
         <Activity size={48} color={currentTheme.mutedForeground} />
         <Text style={styles.emptyTitle}>Not Available</Text>
         <Text style={styles.emptySubtitle}>
-          Fitness tracking via Apple Health is only available on iOS devices.
+          Fitness tracking is not available on this device.
         </Text>
       </View>
     );
@@ -206,7 +238,9 @@ export default function FitnessTab() {
           <Activity size={24} color={currentTheme.primary} />
           <View style={styles.headerText}>
             <Text style={styles.cardTitle}>Today's Activity</Text>
-            <Text style={styles.cardDescription}>Live data from Apple Health</Text>
+            <Text style={styles.cardDescription}>
+              {isHealthKitAvailable() ? 'Live data from Apple Health' : 'Live data from Health Connect'}
+            </Text>
           </View>
         </View>
 

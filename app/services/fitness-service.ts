@@ -2,6 +2,14 @@ import Healthkit, {
     type QuantityTypeIdentifier,
 } from '@kingstinct/react-native-healthkit';
 import { Platform } from 'react-native';
+import {
+    aggregateGroupByPeriod,
+    getSdkStatus,
+    initialize as initializeHealthConnect,
+    requestPermission as requestHealthConnectPermission,
+    SdkAvailabilityStatus,
+} from 'react-native-health-connect';
+import type { RecordType } from 'react-native-health-connect';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -27,7 +35,7 @@ export interface FitnessHistoryResponse {
   stepGoal: number;
 }
 
-// ─── HealthKit helpers ──────────────────────────────────────────────────────
+// ─── Shared helpers ─────────────────────────────────────────────────────────
 
 /**
  * Formats a Date as a 'YYYY-MM-DD' key using its *local* calendar day.
@@ -41,6 +49,20 @@ const toLocalDateKey = (date: Date): string => {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+
+/** Returns the last `days` days (inclusive of today) as local midnight-to-end-of-day bounds. */
+const getDayRange = (days: number): { startDate: Date; endDate: Date } => {
+  const endDate = new Date();
+  endDate.setHours(23, 59, 59, 999);
+
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - (days - 1));
+  startDate.setHours(0, 0, 0, 0);
+
+  return { startDate, endDate };
+};
+
+// ─── HealthKit helpers (iOS) ────────────────────────────────────────────────
 
 /** Returns true only on iOS devices where HealthKit is available */
 export const isHealthKitAvailable = (): boolean => Platform.OS === 'ios';
@@ -92,6 +114,31 @@ const queryDailySums = async (
   return map;
 };
 
+/** Builds one FitnessDataPoint per day in [startDate, endDate] from three daily-sum maps. */
+const buildDataPoints = (
+  startDate: Date,
+  endDate: Date,
+  stepsMap: Record<string, number>,
+  stairsMap: Record<string, number>,
+  caloriesMap: Record<string, number>,
+): FitnessDataPoint[] => {
+  const dataPoints: FitnessDataPoint[] = [];
+  const cursor = new Date(startDate);
+
+  while (cursor <= endDate) {
+    const dateKey = toLocalDateKey(cursor);
+    dataPoints.push({
+      date: dateKey,
+      steps: Math.round(stepsMap[dateKey] ?? 0),
+      stairsClimbed: Math.round(stairsMap[dateKey] ?? 0),
+      caloriesBurned: Math.round(caloriesMap[dateKey] ?? 0),
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dataPoints;
+};
+
 /**
  * Fetch step count, flights climbed, and calories burned from HealthKit
  * for the last `days` days (inclusive of today).
@@ -99,12 +146,7 @@ const queryDailySums = async (
 export const fetchHealthKitData = async (
   days: number = 7,
 ): Promise<FitnessDataPoint[]> => {
-  const endDate = new Date();
-  endDate.setHours(23, 59, 59, 999);
-
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - (days - 1));
-  startDate.setHours(0, 0, 0, 0);
+  const { startDate, endDate } = getDayRange(days);
 
   const [stepsMap, stairsMap, caloriesMap] = await Promise.all([
     queryDailySums(
@@ -127,34 +169,152 @@ export const fetchHealthKitData = async (
     ),
   ]);
 
-  const dataPoints: FitnessDataPoint[] = [];
-  const cursor = new Date(startDate);
+  return buildDataPoints(startDate, endDate, stepsMap, stairsMap, caloriesMap);
+};
 
-  while (cursor <= endDate) {
-    const dateKey = toLocalDateKey(cursor);
-    dataPoints.push({
-      date: dateKey,
-      steps: Math.round(stepsMap[dateKey] ?? 0),
-      stairsClimbed: Math.round(stairsMap[dateKey] ?? 0),
-      caloriesBurned: Math.round(caloriesMap[dateKey] ?? 0),
-    });
-    cursor.setDate(cursor.getDate() + 1);
+// ─── Health Connect helpers (Android) ───────────────────────────────────────
+
+/** Returns true only on Android devices where Health Connect is targeted */
+export const isHealthConnectAvailable = (): boolean => Platform.OS === 'android';
+
+/**
+ * Checks whether the Health Connect provider app is installed and ready.
+ * On API < 34 this requires the standalone Health Connect app from the Play
+ * Store; on API >= 34 it's built into the OS. Distinct from permission
+ * status — this only reflects whether the SDK itself can be used.
+ */
+export const isHealthConnectSdkAvailable = async (): Promise<boolean> => {
+  if (!isHealthConnectAvailable()) return false;
+  try {
+    const status = await getSdkStatus();
+    return status === SdkAvailabilityStatus.SDK_AVAILABLE;
+  } catch (error) {
+    console.warn('[fitness-service] isHealthConnectSdkAvailable failed', error);
+    return false;
   }
+};
 
-  return dataPoints;
+/**
+ * Request Health Connect read permissions for steps, floors climbed, and
+ * active calories burned. Resolves to true if every requested permission
+ * was granted.
+ */
+export const requestHealthConnectPermissions = async (): Promise<boolean> => {
+  if (!isHealthConnectAvailable()) return false;
+  try {
+    const initialized = await initializeHealthConnect();
+    if (!initialized) return false;
+
+    const requested: { accessType: 'read'; recordType: RecordType }[] = [
+      { accessType: 'read', recordType: 'Steps' },
+      { accessType: 'read', recordType: 'FloorsClimbed' },
+      { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
+    ];
+    const granted = await requestHealthConnectPermission(requested);
+
+    return requested.every(want =>
+      granted.some(
+        got => got.accessType === want.accessType && got.recordType === want.recordType,
+      ),
+    );
+  } catch (error) {
+    console.warn('[fitness-service] requestHealthConnectPermissions failed', error);
+    return false;
+  }
+};
+
+/**
+ * Query a daily sum for a Health Connect record type over a date range,
+ * reading `resultKey` (e.g. 'COUNT_TOTAL') off each day's aggregate result.
+ * Returns a map of 'YYYY-MM-DD' → numeric value.
+ */
+const queryDailySumsHealthConnect = async (
+  recordType: 'Steps' | 'FloorsClimbed' | 'ActiveCaloriesBurned',
+  resultKey: string,
+  startDate: Date,
+  endDate: Date,
+): Promise<Record<string, number>> => {
+  const results = await aggregateGroupByPeriod({
+    recordType,
+    timeRangeFilter: {
+      operator: 'between',
+      startTime: startDate.toISOString(),
+      endTime: endDate.toISOString(),
+    },
+    timeRangeSlicer: { period: 'DAYS', length: 1 },
+  } as Parameters<typeof aggregateGroupByPeriod>[0]);
+
+  const map: Record<string, number> = {};
+  for (const group of results) {
+    const dateKey = toLocalDateKey(new Date(group.startTime));
+    const value = (group.result as Record<string, unknown>)[resultKey];
+    if (typeof value === 'number') {
+      map[dateKey] = value;
+    } else if (value && typeof value === 'object' && 'inKilocalories' in value) {
+      map[dateKey] = (value as { inKilocalories: number }).inKilocalories;
+    }
+  }
+  return map;
+};
+
+/**
+ * Fetch step count, floors climbed, and active calories burned from Health
+ * Connect for the last `days` days (inclusive of today).
+ */
+export const fetchHealthConnectData = async (
+  days: number = 7,
+): Promise<FitnessDataPoint[]> => {
+  const { startDate, endDate } = getDayRange(days);
+
+  const [stepsMap, stairsMap, caloriesMap] = await Promise.all([
+    queryDailySumsHealthConnect('Steps', 'COUNT_TOTAL', startDate, endDate),
+    queryDailySumsHealthConnect('FloorsClimbed', 'FLOORS_CLIMBED_TOTAL', startDate, endDate),
+    queryDailySumsHealthConnect('ActiveCaloriesBurned', 'ACTIVE_CALORIES_TOTAL', startDate, endDate),
+  ]);
+
+  return buildDataPoints(startDate, endDate, stepsMap, stairsMap, caloriesMap);
+};
+
+// ─── Cross-platform dispatch ────────────────────────────────────────────────
+
+/** Returns true when an on-device health data source (HealthKit or Health Connect) is available. */
+export const isDeviceHealthDataAvailable = (): boolean =>
+  isHealthKitAvailable() || isHealthConnectAvailable();
+
+/** Requests on-device health permissions for whichever platform source applies. */
+export const requestDeviceHealthPermissions = async (): Promise<boolean> => {
+  if (isHealthKitAvailable()) return requestHealthKitPermissions();
+  if (isHealthConnectAvailable()) return requestHealthConnectPermissions();
+  return false;
+};
+
+/** Fetches fitness data from whichever on-device health source applies. */
+export const fetchDeviceHealthData = async (
+  days: number = 7,
+): Promise<FitnessDataPoint[]> => {
+  if (isHealthKitAvailable()) return fetchHealthKitData(days);
+  if (isHealthConnectAvailable()) return fetchHealthConnectData(days);
+  return [];
 };
 
 // ─── Backend API calls ──────────────────────────────────────────────────────
-// Fitness sync is currently iOS/HealthKit only — Android is handled separately.
+// Each platform syncs through its own route (`/fitness/ios`, `/fitness/android`),
+// but both routes are backed by the same per-user Firestore collections on the
+// backend — there's no data split, just separate endpoints per client.
+
+/** Resolves the platform-specific fitness route, e.g. '/fitness/ios' or '/fitness/android'. */
+const getFitnessEndpoint = (): string =>
+  `${API_BASE_URL}/fitness/${Platform.OS === 'android' ? 'android' : 'ios'}`;
 
 /**
- * POST /fitness/ios — upsert fitness data points for the authenticated user.
+ * POST /fitness/{ios|android} — upsert fitness data points for the
+ * authenticated user.
  */
 export const syncFitnessData = async (
   token: string,
   data: FitnessDataPoint[],
 ): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/fitness/ios`, {
+  const response = await fetch(getFitnessEndpoint(), {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -169,14 +329,14 @@ export const syncFitnessData = async (
 };
 
 /**
- * GET /fitness/ios?days=7 — fetch fitness history and step goal for the
- * authenticated user.
+ * GET /fitness/{ios|android}?days=7 — fetch fitness history and step goal
+ * for the authenticated user.
  */
 export const getFitnessHistory = async (
   token: string,
   days: number = 7,
 ): Promise<FitnessHistoryResponse> => {
-  const response = await fetch(`${API_BASE_URL}/fitness/ios?days=${days}`, {
+  const response = await fetch(`${getFitnessEndpoint()}?days=${days}`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -191,13 +351,13 @@ export const getFitnessHistory = async (
 };
 
 /**
- * PUT /fitness/ios — update the authenticated user's daily step goal.
+ * PUT /fitness/{ios|android} — update the authenticated user's daily step goal.
  */
 export const updateStepGoal = async (
   token: string,
   stepGoal: number,
 ): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/fitness/ios`, {
+  const response = await fetch(getFitnessEndpoint(), {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
