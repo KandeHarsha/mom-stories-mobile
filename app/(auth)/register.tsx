@@ -190,6 +190,26 @@ export default function Register() {
                     </View>
                 </View>
 
+                <Text
+                    className="mb-4 px-2 text-xs text-center w-4/5"
+                    style={{ color: currentTheme.mutedForeground }}
+                >
+                    By registering, you agree to our{" "}
+                    <Text
+                        style={{ color: currentTheme.primary }}
+                        onPress={() => router.push("/legal/terms")}
+                    >
+                        Terms of Use
+                    </Text>{" "}
+                    and{" "}
+                    <Text
+                        style={{ color: currentTheme.primary }}
+                        onPress={() => router.push("/legal/privacy")}
+                    >
+                        Privacy Policy
+                    </Text>
+                    .
+                </Text>
                 <TouchableOpacity
                     className="items-center p-4 rounded-lg w-4/5"
                     style={{ backgroundColor: currentTheme.primary }}
