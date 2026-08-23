@@ -33,6 +33,7 @@ interface JournalEntry {
   title: string
   content: string
   imageUri?: string
+  imageMimeType?: string
   audioUri?: string
   category?: string
   tags?: string[]
@@ -94,18 +95,26 @@ const createJournalEntry = async (entry: Omit<JournalEntry, 'id' | 'createdAt'>,
       formData.append('tags', JSON.stringify(entry.tags))
     }
 
-    // Handle image upload
+    // Handle image upload — append the local file URI directly (RN's FormData
+    // knows how to stream a `{ uri, type, name }` part). Round-tripping through
+    // fetch().blob() first is unreliable for local file:// URIs on RN and can
+    // silently produce an empty blob, which is why images were being dropped.
     if (entry.imageUri) {
-      const imageResponse = await fetch(entry.imageUri)
-      const imageBlob = await imageResponse.blob()
-      formData.append('image', imageBlob as any, 'image.jpg')
+      formData.append('picture', {
+        uri: entry.imageUri,
+        type: entry.imageMimeType || 'image/jpeg',
+        name: 'image.jpg',
+      } as any)
     }
 
-    // Handle audio upload
+    // Handle audio upload — expo-av's HIGH_QUALITY preset always outputs .m4a
+    // on both iOS and Android.
     if (entry.audioUri) {
-      const audioResponse = await fetch(entry.audioUri)
-      const audioBlob = await audioResponse.blob()
-      formData.append('audio', audioBlob as any, 'audio.m4a')
+      formData.append('voiceNote', {
+        uri: entry.audioUri,
+        type: 'audio/m4a',
+        name: 'audio.m4a',
+      } as any)
     }
 
     const response = await fetch(`${API_BASE_URL}/journal`, {
@@ -125,6 +134,8 @@ const createJournalEntry = async (entry: Omit<JournalEntry, 'id' | 'createdAt'>,
 
     return {
       ...data,
+      imageUri: data.imageUrl || data.imageUri,
+      audioUri: data.voiceNoteUrl || data.audioUri,
       createdAt: data.createdAt || data.created_at || 'Just now'
     }
   } catch (error) {
@@ -144,6 +155,7 @@ const PrivateJournalScreen = () => {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null)
+  const [selectedImageMimeType, setSelectedImageMimeType] = useState<string | null>(null)
   const [audioUri, setAudioUri] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<JournalCategory>(DEFAULT_CATEGORY)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -323,6 +335,7 @@ const PrivateJournalScreen = () => {
     setTitle('')
     setContent('')
     setSelectedImageUri(null)
+    setSelectedImageMimeType(null)
     setAudioUri(null)
     setSelectedCategory(DEFAULT_CATEGORY)
     setSelectedTags([])
@@ -347,6 +360,7 @@ const PrivateJournalScreen = () => {
         title: title.trim(),
         content: content.trim(),
         imageUri: selectedImageUri || undefined,
+        imageMimeType: selectedImageMimeType || undefined,
         audioUri: audioUri || undefined,
         category: selectedCategory,
         tags: selectedTags,
@@ -382,6 +396,7 @@ const PrivateJournalScreen = () => {
 
     if (!result.canceled) {
       setSelectedImageUri(result.assets[0].uri)
+      setSelectedImageMimeType(result.assets[0].mimeType || 'image/jpeg')
     }
   }
 
@@ -428,7 +443,10 @@ const PrivateJournalScreen = () => {
     }
   }
 
-  const removeImage = () => setSelectedImageUri(null)
+  const removeImage = () => {
+    setSelectedImageUri(null)
+    setSelectedImageMimeType(null)
+  }
   const removeAudio = () => setAudioUri(null)
 
   // Tag handling functions
