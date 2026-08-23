@@ -213,13 +213,6 @@ const ProfileScreen = () => {
       onPress: () => router.push('/profile/accountSettings' as any)
     },
     {
-      id: 'privacy',
-      title: 'Privacy & Security',
-      subtitle: 'Control your privacy settings',
-      icon: Shield,
-      onPress: () => Alert.alert('Coming Soon', 'Privacy settings will be available soon')
-    },
-    {
       id: 'help',
       title: 'Help & Support',
       subtitle: 'Get help and contact support',

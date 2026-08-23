@@ -24,7 +24,7 @@ interface TabConfig {
 const ALL_TABS: TabConfig[] = [
   { id: 'growth',       label: 'Baby Growth',  icon: Baby, phases: ['post_delivery'] },
   { id: 'vaccinations', label: 'Vaccinations',  icon: Baby, phases: ['post_delivery'] },
-  { id: 'wellness',     label: 'Mom Wellness',  icon: Baby }, // visible to all phases
+  // { id: 'wellness',     label: 'Mom Wellness',  icon: Baby }, // visible to all phases
   { id: 'fitness',      label: 'Fitness',       icon: Baby }, // visible to all phases
 ];
 
