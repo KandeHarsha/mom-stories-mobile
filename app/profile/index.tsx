@@ -1,8 +1,9 @@
 import themes from '@/constants/colors'
 import { useAuth } from '@/context/AuthContext'
+import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
 import * as Updates from 'expo-updates'
-import { Baby, ChevronRight, Download, HelpCircle, LogIn, LogOut, RefreshCw, Settings, Shield, User } from 'lucide-react-native'
+import { Baby, ChevronRight, Download, FileText, HelpCircle, LogIn, LogOut, RefreshCw, Settings, Shield, User } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useState } from 'react'
 import {
@@ -209,14 +210,7 @@ const ProfileScreen = () => {
       title: 'Account Settings',
       subtitle: 'Manage your account information',
       icon: Settings,
-      onPress: () => Alert.alert('Coming Soon', 'Account settings will be available soon')
-    },
-    {
-      id: 'privacy',
-      title: 'Privacy & Security',
-      subtitle: 'Control your privacy settings',
-      icon: Shield,
-      onPress: () => Alert.alert('Coming Soon', 'Privacy settings will be available soon')
+      onPress: () => router.push('/profile/accountSettings' as any)
     },
     {
       id: 'help',
@@ -224,6 +218,20 @@ const ProfileScreen = () => {
       subtitle: 'Get help and contact support',
       icon: HelpCircle,
       onPress: () => router.push('/profile/customerSupport')
+    },
+    {
+      id: 'terms',
+      title: 'Terms of Use',
+      subtitle: 'Read the terms for using Mom Stories',
+      icon: FileText,
+      onPress: () => router.push('/legal/terms')
+    },
+    {
+      id: 'privacy-policy',
+      title: 'Privacy Policy',
+      subtitle: 'Learn how we handle your data',
+      icon: FileText,
+      onPress: () => router.push('/legal/privacy')
     }
   ]
 
@@ -398,12 +406,29 @@ const ProfileScreen = () => {
         {/* App Info */}
         <View style={styles.appInfo}>
           <Text style={styles.appInfoText}>Mom Stories Mobile</Text>
-          <Text style={styles.appInfoText}>Version 1.0.0</Text>
+          <Text style={styles.appInfoText}>Version {Constants.expoConfig?.version || '1.0.0'}</Text>
+          {Constants.expoConfig?.runtimeVersion && (
+            <Text style={styles.appInfoText}>
+              Runtime: {typeof Constants.expoConfig.runtimeVersion === 'string' 
+                ? Constants.expoConfig.runtimeVersion 
+                : Constants.expoConfig.runtimeVersion.policy || 'appVersion'}
+            </Text>
+          )}
           <Text style={[styles.appInfoText, { marginTop: 8 }]}>
             {currentlyRunning.isEmbeddedLaunch
               ? 'Running built-in version'
-              : 'Running from update'}
+              : `Running from update (${currentlyRunning.updateId?.slice(0, 8) || 'unknown'})`}
           </Text>
+          {isUpdateAvailable && (
+            <Text style={[styles.appInfoText, { color: currentTheme.primary, fontWeight: '500' }]}>
+              🎉 New update available!
+            </Text>
+          )}
+          {isUpdatePending && (
+            <Text style={[styles.appInfoText, { color: currentTheme.primary, fontWeight: '500' }]}>
+              ⏳ Update ready to install
+            </Text>
+          )}
           
           {/* Update Actions */}
           <View style={styles.updateLinksContainer}>

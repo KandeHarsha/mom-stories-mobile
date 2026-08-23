@@ -1,12 +1,18 @@
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { NotificationProvider } from "@/context/NotificationContext";
+import * as Sentry from '@sentry/react-native';
 import * as Notifications from "expo-notifications";
 import { Stack, useRouter, useSegments } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "nativewind";
 import React, { useEffect } from "react";
 import themes from "../constants/colors";
 import "./global.css";
-import * as Sentry from '@sentry/react-native';
+
+// Keep the native splash screen on screen until we can hand off to our own
+// animated splash (see AnimatedSplash / AuthContext), so there's no flash
+// of blank screen between the two.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 Sentry.init({
   dsn: 'https://543958d2bd8c1fafe8ec5dd49d6e2c8b@o4511059359825920.ingest.us.sentry.io/4511059362643968',
@@ -75,11 +81,21 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="journal/[entryId]" options={{ headerShown: false }} />
       <Stack.Screen name="profile/customerSupport" options={{ headerShown: false }} />
+      <Stack.Screen name="profile/accountSettings" options={{ headerShown: false }} />
+      <Stack.Screen name="medications/index" options={{ headerShown: false }} />
+      <Stack.Screen name="appointments/index" options={{ headerShown: false }} />
+      <Stack.Screen name="legal/[doc]" options={{ headerShown: false }} />
     </Stack>
   );
 }
 
 export default Sentry.wrap(function RootLayout() {
+  useEffect(() => {
+    // Hand off from the native splash to our animated one as soon as we've
+    // mounted, so the animation is what the user actually sees.
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
+
   return (
     <AuthProvider>
       <NotificationProvider>

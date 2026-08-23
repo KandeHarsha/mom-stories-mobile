@@ -1,14 +1,17 @@
 import themes from '@/constants/colors'
 import { useAuth } from '@/context/AuthContext'
 import { useSwipeDrawer } from '@/hooks'
-import { Bookmark, ChevronRight, Menu, MessageCircle, Plus, Send, X } from 'lucide-react-native'
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
+import { Bookmark, ChevronRight, Menu, MessageCircle, Mic, MicOff, Plus, Send, X } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  Easing,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   Text,
@@ -86,8 +89,13 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [isLoadingSessions, setIsLoadingSessions] = useState(false)
   const [currentSessionTitle, setCurrentSessionTitle] = useState<string>('New Chat')
+  const [isListening, setIsListening] = useState(false)
 
   const scrollViewRef = useRef<ScrollView>(null)
+  const pulseAnim = useRef(new Animated.Value(1)).current
+  const pulseLoop = useRef<Animated.CompositeAnimation | null>(null)
+  const acceptSpeechResults = useRef(false)
+  const speechBaseText = useRef('')
   
   // Swipe drawer hook for gesture support
   const {
@@ -107,6 +115,74 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
   })
+
+  // ─── Speech Recognition ─────────────────────────────────────────────────────
+
+  const startPulse = () => {
+    pulseLoop.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.35, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    )
+    pulseLoop.current.start()
+  }
+
+  const stopPulse = () => {
+    pulseLoop.current?.stop()
+    pulseAnim.setValue(1)
+  }
+
+  useSpeechRecognitionEvent('result', (event) => {
+    if (!acceptSpeechResults.current) return
+    const transcript = event.results[0]?.transcript ?? ''
+    if (!transcript) return
+    const base = speechBaseText.current
+    setInput(base.trim().length === 0 ? transcript : base.trimEnd() + ' ' + transcript)
+  })
+
+  useSpeechRecognitionEvent('error', (event) => {
+    console.warn('Speech recognition error:', event.error, event.message)
+    if (event.error !== 'aborted') {
+      Alert.alert('Speech Error', event.message || 'Speech recognition failed. Please try again.')
+    }
+    setIsListening(false)
+    stopPulse()
+  })
+
+  useSpeechRecognitionEvent('end', () => {
+    setIsListening(false)
+    stopPulse()
+  })
+
+  const toggleSpeechRecognition = async () => {
+    if (isListening) {
+      ExpoSpeechRecognitionModule.stop()
+      return
+    }
+
+    const { status } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
+
+    if (status !== 'granted') {
+      Alert.alert(
+        'Microphone Permission Required',
+        'Please allow microphone access so you can use voice input.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      )
+      return
+    }
+
+    speechBaseText.current = input
+    setIsListening(true)
+    acceptSpeechResults.current = true
+    startPulse()
+    ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false })
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
 
   const formatRelativeTime = (timestamp: Timestamp): string => {
     const now = Date.now()
@@ -178,6 +254,14 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
 
   const sendMessage = async () => {
     if (!input.trim() || !token) return
+
+    // Stop any active speech recognition before sending
+    if (isListening) {
+      acceptSpeechResults.current = false
+      ExpoSpeechRecognitionModule.stop()
+      setIsListening(false)
+      stopPulse()
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -773,26 +857,48 @@ const AiSupportScreen = ({ initialQuestion }: AiSupportScreenProps = {}) => {
           borderTopWidth: 1,
           borderTopColor: currentTheme.border
         }}>
-          <TextInput
-            style={{
-              flex: 1,
-              borderWidth: 1,
-              borderColor: currentTheme.border,
-              borderRadius: 20,
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              marginRight: 8,
-              backgroundColor: currentTheme.background,
-              color: currentTheme.foreground,
-              maxHeight: 100
-            }}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Type your message..."
-            placeholderTextColor={currentTheme.mutedForeground}
-            multiline
-            textAlignVertical="top"
-          />
+          {/* Text input + mic icon container */}
+          <View style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'flex-end',
+            borderWidth: 1,
+            borderColor: isListening ? currentTheme.primary : currentTheme.border,
+            borderRadius: 20,
+            backgroundColor: currentTheme.background,
+            marginRight: 8,
+            paddingRight: 8,
+          }}>
+            <TextInput
+              style={{
+                flex: 1,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                color: currentTheme.foreground,
+                maxHeight: 100,
+              }}
+              value={input}
+              onChangeText={setInput}
+              placeholder={isListening ? 'Listening…' : 'Type your message...'}
+              placeholderTextColor={isListening ? currentTheme.primary : currentTheme.mutedForeground}
+              multiline
+              textAlignVertical="top"
+            />
+            {/* Mic button — trailing icon inside input */}
+            <TouchableOpacity
+              onPress={toggleSpeechRecognition}
+              style={{ paddingBottom: 12, paddingHorizontal: 4 }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                {isListening ? (
+                  <MicOff size={20} color={currentTheme.primary} />
+                ) : (
+                  <Mic size={20} color={currentTheme.mutedForeground} />
+                )}
+              </Animated.View>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
             onPress={sendMessage}
             disabled={!input.trim() || isLoading}

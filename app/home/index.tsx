@@ -3,24 +3,30 @@ import { WHO_LENGTH_CM_RANGES, WHO_WEIGHT_KG_RANGES } from '@/constants/growthDa
 import { useAuth } from '@/context/AuthContext';
 import { useNotification } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
-import { Baby, BookHeart, Calendar, CalendarIcon, Heart, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
+import { BookHeart, CalendarIcon, CalendarPlus, Mic, MicOff, Pill, Ruler, Scale, Send, TrendingUp, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Calendar as RNCalendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import PregnancyPhaseView from './pregnencyPhaseView';
+import PostDeliveryPhaseView from './postDeliveryPhaseView';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -45,6 +51,28 @@ interface BabyProfile {
   weight: WeightEntry[];
 }
 
+interface Appointment {
+  id: string;
+  userId: string;
+  date: string;
+  type?: 'doctor' | 'lab' | 'physiotherapy' | 'dietitian' | 'mental_wellness';
+  fastingRequired?: boolean;
+  doctor?: string;
+  notes?: string;
+  medications?: string[];
+  followUp?: string;
+  documents?: string[];
+  exercises?: string[];
+  painScore?: number;
+  dietPlan?: string;
+  isFollowUp?: boolean;
+  parentAppointmentId?: string;
+  isCancelled?: boolean;
+  isRescheduled?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export default function Home() {
   const { colorScheme } = useColorScheme();
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light;
@@ -54,6 +82,83 @@ export default function Home() {
   const [babyProfile, setBabyProfile] = useState<BabyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [aiQuestion, setAiQuestion] = useState('');
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false);
+  const [isListeningAi, setIsListeningAi] = useState(false);
+  const pulseAnimAi = useRef(new Animated.Value(1)).current;
+  const pulseLoopAi = useRef<Animated.CompositeAnimation | null>(null);
+  const acceptSpeechResultsAi = useRef(false);
+  const speechBaseTextAi = useRef('');
+
+  const startAiPulse = () => {
+    pulseLoopAi.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimAi, { toValue: 1.35, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnimAi, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    pulseLoopAi.current.start();
+  };
+
+  const stopAiPulse = () => {
+    pulseLoopAi.current?.stop();
+    pulseAnimAi.setValue(1);
+  };
+
+  useSpeechRecognitionEvent('result', (event) => {
+    if (!acceptSpeechResultsAi.current) return;
+    const transcript = event.results[0]?.transcript ?? '';
+    if (!transcript) return;
+    const base = speechBaseTextAi.current;
+    setAiQuestion(base.trim().length === 0 ? transcript : base.trimEnd() + ' ' + transcript);
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    if (!acceptSpeechResultsAi.current) return;
+    console.warn('Speech recognition error:', event.error, event.message);
+    if (event.error !== 'aborted') {
+      Alert.alert('Speech Error', event.message || 'Speech recognition failed. Please try again.');
+    }
+    setIsListeningAi(false);
+    stopAiPulse();
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    if (!acceptSpeechResultsAi.current) return;
+    acceptSpeechResultsAi.current = false;
+    setIsListeningAi(false);
+    stopAiPulse();
+  });
+
+  const toggleAiSpeech = async () => {
+    if (isListeningAi) {
+      acceptSpeechResultsAi.current = false;
+      ExpoSpeechRecognitionModule.stop();
+      setIsListeningAi(false);
+      stopAiPulse();
+      return;
+    }
+
+    const { status } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+
+    if (status !== 'granted') {
+      Alert.alert(
+        'Microphone Permission Required',
+        'Please allow microphone access to use voice input.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+
+    speechBaseTextAi.current = aiQuestion;
+    acceptSpeechResultsAi.current = true;
+    setIsListeningAi(true);
+    startAiPulse();
+    ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false });
+  };
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -94,6 +199,35 @@ export default function Home() {
 
     fetchBabyProfile();
   }, [session, selectedChildId]);
+
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      if (!session?.accessToken) {
+        return;
+      }
+
+      setAppointmentsLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/appointment`, {
+          headers: {
+            'Authorization': `Bearer ${session.accessToken}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const appointmentsList = data.appointments || data || [];
+          setAppointments(appointmentsList);
+        }
+      } catch (err) {
+        console.error('Failed to fetch appointments:', err);
+      } finally {
+        setAppointmentsLoading(false);
+      }
+    };
+
+    fetchAppointments();
+  }, [session]);
 
   const handleAddMeasurement = async () => {
     if (!weight && !height) {
@@ -208,7 +342,38 @@ export default function Home() {
     return { weightRange, heightRange };
   };
 
-  const userName = user?.FullName || user?.FirstName || 'Mom';
+  const userName = user?.name || user?.fullName || user?.firstName || 'Mom';
+
+  const getNextAppointment = () => {
+    if (appointments.length === 0) return null;
+    
+    const today = new Date();
+    const futureAppointments = appointments
+      .filter(apt => new Date(apt.date) >= today)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    return futureAppointments[0] || appointments[appointments.length - 1];
+  };
+
+  const formatAppointmentDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Tomorrow';
+    } else {
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric'
+      });
+    }
+  };
+
+  const nextAppointment = getNextAppointment();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -219,129 +384,21 @@ export default function Home() {
           <Text style={styles.subGreeting}>Welcome to your motherhood journey</Text>
         </View>
 
-        {/* Child Profile Card */}
-        {loading ? (
-          <View style={styles.card}>
-            <ActivityIndicator size="large" color={currentTheme.primary} />
-          </View>
-        ) : babyProfile ? (
-          <TouchableOpacity
-            style={styles.childCard}
-            onPress={() => router.push('/healthTracker')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.childCardHeader}>
-              <View style={styles.childIconContainer}>
-                <Baby size={32} color={currentTheme.primary} />
-              </View>
-              <View style={styles.childInfo}>
-                <Text style={styles.childName}>{babyProfile.name}</Text>
-                <Text style={styles.childAge}>{calculateAge(babyProfile.birthday)}</Text>
-              </View>
-              <Heart size={24} color={currentTheme.destructive} fill={currentTheme.destructive} />
-            </View>
+        {user?.phase === 'post_delivery' && (
+          <PostDeliveryPhaseView
+            loading={loading}
+            babyProfile={babyProfile}
+            currentTheme={currentTheme}
+            styles={styles}
+            calculateAge={calculateAge}
+            getIdealRange={getIdealRange}
+            onOpenHealthTracker={() => router.push('/healthTracker')}
+            onOpenAddMeasurement={() => setShowAddModal(true)}
+          />
+        )}
 
-            <View style={styles.divider} />
-
-            <View style={styles.childStats}>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Ideal Weight</Text>
-                <Text style={styles.statValue}>
-                  {(() => {
-                    const { weightRange } = getIdealRange(babyProfile.birthday, babyProfile.gender);
-                    return weightRange ? `${weightRange.min}-${weightRange.max} kg` : 'N/A';
-                  })()}
-                </Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Ideal Height</Text>
-                <Text style={styles.statValue}>
-                  {(() => {
-                    const { heightRange } = getIdealRange(babyProfile.birthday, babyProfile.gender);
-                    return heightRange ? `${heightRange.min}-${heightRange.max} cm` : 'N/A';
-                  })()}
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ) : null}
-
-        {/* Growth Details Card */}
-        {babyProfile && (
-          <View style={styles.growthDetailsCard}>
-            <View style={styles.growthDetailsHeader}>
-              <Text style={styles.growthDetailsTitle}>Growth Details</Text>
-              <TouchableOpacity
-                onPress={() => setShowAddModal(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.updateRecordText}>Update Record</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.growthDetailsContent}>
-              <View style={styles.growthDetailItem}>
-                <View style={styles.growthDetailIconContainer}>
-                  <Scale size={20} color={currentTheme.primary} />
-                </View>
-                <View style={styles.growthDetailInfo}>
-                  <Text style={styles.growthDetailLabel}>Current Weight</Text>
-                  <Text style={styles.growthDetailValue}>
-                    {babyProfile.weight && babyProfile.weight.length > 0
-                      ? `${babyProfile.weight[babyProfile.weight.length - 1].value} kg`
-                      : 'No data'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.growthDetailDivider} />
-
-              <View style={styles.growthDetailItem}>
-                <View style={styles.growthDetailIconContainer}>
-                  <Ruler size={20} color={currentTheme.primary} />
-                </View>
-                <View style={styles.growthDetailInfo}>
-                  <Text style={styles.growthDetailLabel}>Current Height</Text>
-                  <Text style={styles.growthDetailValue}>
-                    {babyProfile.height && babyProfile.height.length > 0
-                      ? `${babyProfile.height[babyProfile.height.length - 1].value} cm`
-                      : 'No data'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {(babyProfile.weight.length > 0 || babyProfile.height.length > 0) && (
-              <View style={styles.lastUpdatedContainer}>
-                <Calendar size={14} color={currentTheme.mutedForeground} />
-                <Text style={styles.lastUpdatedText}>
-                  Last updated:{' '}
-                  {(() => {
-                    const lastWeightDate = babyProfile.weight.length > 0
-                      ? new Date(babyProfile.weight[babyProfile.weight.length - 1].date)
-                      : null;
-                    const lastHeightDate = babyProfile.height.length > 0
-                      ? new Date(babyProfile.height[babyProfile.height.length - 1].date)
-                      : null;
-
-                    let lastDate = lastWeightDate;
-                    if (lastHeightDate && (!lastWeightDate || lastHeightDate > lastWeightDate)) {
-                      lastDate = lastHeightDate;
-                    }
-
-                    return lastDate
-                      ? lastDate.toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })
-                      : 'N/A';
-                  })()}
-                </Text>
-              </View>
-            )}
-          </View>
+        {user?.phase === 'pregnancy' && (
+          <PregnancyPhaseView currentTheme={currentTheme} />
         )}
 
         {/* AI Question Section */}
@@ -349,16 +406,31 @@ export default function Home() {
           <Text style={styles.aiSectionTitle}>AI Support</Text>
           <Text style={styles.aiSectionSubtitle}>Get instant answers to your parenting questions</Text>
           <View style={styles.aiQuestionCard}>
-            <TextInput
-              style={styles.aiQuestionInput}
-              placeholder="Ask me anything about parenting..."
-              placeholderTextColor={currentTheme.mutedForeground}
-              value={aiQuestion}
-              onChangeText={setAiQuestion}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
+            <View style={{ position: 'relative' }}>
+              <TextInput
+                style={[styles.aiQuestionInput, { paddingBottom: 36 }, isListeningAi && { borderColor: currentTheme.primary }]}
+                placeholder={isListeningAi ? 'Listening…' : 'Ask me anything about parenting...'}
+                placeholderTextColor={isListeningAi ? currentTheme.primary : currentTheme.mutedForeground}
+                value={aiQuestion}
+                onChangeText={setAiQuestion}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+              <TouchableOpacity
+                onPress={toggleAiSpeech}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ position: 'absolute', bottom: 20, right: 10 }}
+              >
+                <Animated.View style={{ transform: [{ scale: pulseAnimAi }] }}>
+                  {isListeningAi ? (
+                    <MicOff size={20} color={currentTheme.primary} />
+                  ) : (
+                    <Mic size={20} color={currentTheme.mutedForeground} />
+                  )}
+                </Animated.View>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={styles.aiSubmitButton}
               onPress={() => {
@@ -406,6 +478,46 @@ export default function Home() {
             <Text style={styles.featureDescriptionSmall}>
               Monitor your baby's growth
             </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Medication Reminders & Appointments Row */}
+        <View style={styles.featuresRow}>
+          <TouchableOpacity
+            style={styles.featureCardSmall}
+            onPress={() => router.push('/medications')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.featureIconContainerSmall}>
+              <Pill size={28} color={currentTheme.primary} />
+            </View>
+            <Text style={styles.featureTitleSmall}>Medication Reminders</Text>
+            <Text style={styles.featureDescriptionSmall}>
+              Track your medications and dosages
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.featureCardSmall}
+            onPress={() => router.push('/appointments')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.featureIconContainerSmall}>
+              <CalendarPlus size={28} color={currentTheme.primary} />
+            </View>
+            <Text style={styles.featureTitleSmall}>Appointments</Text>
+            {appointmentsLoading ? (
+              <ActivityIndicator size="small" color={currentTheme.primary} style={{ marginTop: 8 }} />
+            ) : nextAppointment ? (
+              <Text style={styles.featureDescriptionSmall}>
+                Next: {formatAppointmentDate(nextAppointment.date)}
+                {nextAppointment.doctor && ` - Dr. ${nextAppointment.doctor}`}
+              </Text>
+            ) : (
+              <Text style={styles.featureDescriptionSmall}>
+                No upcoming appointments
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>

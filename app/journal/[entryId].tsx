@@ -80,6 +80,26 @@ const deleteJournalEntry = async (entryId: string, token: string): Promise<void>
     }
 }
 
+// Route params get URL-decoded by expo-router, which turns the encoded slashes
+// (%2F) in a Firebase Storage object path back into literal slashes and breaks
+// the signed download URL. Re-encode the object path segment to restore it.
+const fixFirebaseStorageUri = (uri: string): string => {
+    const marker = '/o/'
+    const markerIndex = uri.indexOf(marker)
+    if (markerIndex === -1) {
+        return uri
+    }
+
+    const pathStart = markerIndex + marker.length
+    const queryIndex = uri.indexOf('?', pathStart)
+    const pathEnd = queryIndex === -1 ? uri.length : queryIndex
+
+    const objectPath = uri.slice(pathStart, pathEnd)
+    const fixedObjectPath = objectPath.split('/').join('%2F')
+
+    return uri.slice(0, pathStart) + fixedObjectPath + uri.slice(pathEnd)
+}
+
 const JournalEntryEdit = () => {
     const params = useLocalSearchParams<{
         entryId: string
@@ -139,8 +159,8 @@ const JournalEntryEdit = () => {
                 id: params.entryId,
                 title: params.title,
                 content: params.content,
-                imageUri: params.imageUri && params.imageUri.trim() !== '' ? params.imageUri : undefined,
-                audioUri: params.audioUri && params.audioUri.trim() !== '' ? params.audioUri : undefined,
+                imageUri: params.imageUri && params.imageUri.trim() !== '' ? fixFirebaseStorageUri(params.imageUri) : undefined,
+                audioUri: params.audioUri && params.audioUri.trim() !== '' ? fixFirebaseStorageUri(params.audioUri) : undefined,
                 category: params.category || 'General',
                 tags: parsedTags,
                 createdAt: params.createdAt || 'Unknown date'
@@ -454,36 +474,6 @@ const JournalEntryEdit = () => {
                 {entry.imageUri && (
                     <View style={styles.mediaSection}>
                         <Text style={styles.mediaSectionTitle}>Photo</Text>
-                        <TouchableOpacity
-                            onPress={() => {
-                                fetch(entry.imageUri!, {
-                                    method: 'GET',
-                                    headers: {
-                                        'Accept': 'image/*',
-                                        'User-Agent': 'ReactNative'
-                                    }
-                                })
-                                    .then(response => {
-
-                                        if (response.headers.get('content-type')?.includes('json')) {
-                                            return response.text().then(text => {
-                                                throw new Error(`Firebase returned error: ${text}`)
-                                            })
-                                        }
-                                        return response.blob()
-                                    })
-                                    .then(blob => {
-                                    })
-                                    .catch(error => {
-                                        console.error('❌ Firebase Storage error:', error)
-                                    })
-                            }}
-                            style={{ marginBottom: 8 }}
-                        >
-                            <Text style={{ color: currentTheme.primary, fontSize: 12 }}>
-                                Debug Firebase URL (tap to see error)
-                            </Text>
-                        </TouchableOpacity>
                         <View style={styles.imageContainer}>
                             {imageLoading && !imageError && (
                                 <View style={styles.imageLoadingContainer}>
@@ -497,13 +487,7 @@ const JournalEntryEdit = () => {
                                 </View>
                             ) : (
                                 <Image
-                                    source={{
-                                        uri: entry.imageUri,
-                                        headers: {
-                                            'Accept': 'image/*',
-                                            'User-Agent': 'ReactNative'
-                                        }
-                                    }}
+                                    source={{ uri: entry.imageUri }}
                                     style={styles.entryImage}
                                     onLoad={() => {
                                         setImageLoading(false)

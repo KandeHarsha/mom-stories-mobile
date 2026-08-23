@@ -1,8 +1,7 @@
 import { fetchAccessToken } from '@/app/utils';
+import AnimatedSplash from '@/components/AnimatedSplash';
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useState } from "react"; // Explicitly import React
-import { Text } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 interface SessionState {
   accessToken: string
@@ -38,6 +37,7 @@ interface AuthProviderProps {
 
 const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
   const [session, setSession] = useState<SessionState | null>(null);
   const [user, setUser] = useState<any | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
@@ -276,10 +276,8 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
 
   return (
     <AuthContext.Provider value={contextData}>
-      {loading ? (
-        <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <Text>Loading...</Text>
-        </SafeAreaView>
+      {showSplash ? (
+        <AnimatedSplash ready={!loading} onFinish={() => setShowSplash(false)} />
       ) : (
         children
       )}

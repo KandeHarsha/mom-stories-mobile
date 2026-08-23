@@ -1,5 +1,7 @@
 import { ConfigContext, ExpoConfig } from 'expo/config';
 
+const packageJson = require('./package.json');
+
 const IS_DEV = process.env.APP_VARIANT === 'development';
 const IS_PREVIEW = process.env.APP_VARIANT === 'preview';
 
@@ -44,7 +46,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   "name": getAppName(),
   "slug": "mom-stories-mobile",
-  "version": "1.0.0",
+  "version": packageJson.version,
   "orientation": "portrait",
   "icon": "./assets/images/icon.png",
   "scheme": getScheme(),
@@ -60,17 +62,23 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     }
   },
   "android": {
+    "jsEngine": "hermes",
     "icon": "./assets/images/icon.png",
     "adaptiveIcon": {
-      "backgroundColor": "#E6F4FE",
-      "foregroundImage": "./assets/images/icon.png"
+      "backgroundColor": "#F0ECE0",
+      "foregroundImage": "./assets/images/adaptive-icon.png",
+      "monochromeImage": "./assets/images/android-icon-monochrome.png"
     },
     "edgeToEdgeEnabled": true,
     "predictiveBackGestureEnabled": false,
     "package": getUniqueIdentifier(),
     "googleServicesFile": "./google-services.json",
     "permissions": [
-      "POST_NOTIFICATIONS"
+      "POST_NOTIFICATIONS",
+      "RECORD_AUDIO",
+      "android.permission.health.READ_STEPS",
+      "android.permission.health.READ_FLOORS_CLIMBED",
+      "android.permission.health.READ_ACTIVE_CALORIES_BURNED"
     ]
   },
   "web": {
@@ -85,9 +93,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         "ios": {
           "deploymentTarget": "15.1"
+        },
+        "android": {
+          "minSdkVersion": 26
         }
       }
     ],
+    "react-native-health-connect",
     [
       "expo-splash-screen",
       {
@@ -100,7 +112,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         }
       }
     ],
+    "@kingstinct/react-native-healthkit",
     "expo-web-browser",
+    "expo-font",
     [
       "expo-notifications",
       {
@@ -117,6 +131,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         "project": "react-native",
         "organization": "mom-stories"
       }
+    ],
+    [
+      "expo-speech-recognition",
+      {
+        "microphonePermission": "Allow $(PRODUCT_NAME) to use your microphone for voice input.",
+        "speechRecognitionPermission": "Allow $(PRODUCT_NAME) to recognize your speech for voice input.",
+        "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+      }
     ]
   ],
   "experiments": {
@@ -124,7 +146,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "reactCompiler": false
   },
   "runtimeVersion": {
-    "policy": "appVersion"
+    "policy": "fingerprint"
   },
   "updates": {
     "url": "https://u.expo.dev/e106ee42-ff8a-4fcb-acac-12a09ee1f5b4"

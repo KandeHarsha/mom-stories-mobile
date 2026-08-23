@@ -4,13 +4,17 @@ import { useAuth } from '@/context/AuthContext'
 import { Audio } from 'expo-av'
 import * as ImagePicker from 'expo-image-picker'
 import { router } from 'expo-router'
-import { BookOpen, Check, ChevronDown, ChevronRight, ImageIcon, Mic, Plus, RefreshCw, StopCircle, X } from 'lucide-react-native'
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
+import { BookOpen, Check, ChevronDown, ChevronRight, ImageIcon, Mic, MicOff, Plus, RefreshCw, StopCircle, X } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useRef, useState } from 'react'
 import {
   Alert,
+  Animated,
+  Easing,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -29,6 +33,7 @@ interface JournalEntry {
   title: string
   content: string
   imageUri?: string
+  imageMimeType?: string
   audioUri?: string
   category?: string
   tags?: string[]
@@ -90,18 +95,26 @@ const createJournalEntry = async (entry: Omit<JournalEntry, 'id' | 'createdAt'>,
       formData.append('tags', JSON.stringify(entry.tags))
     }
 
-    // Handle image upload
+    // Handle image upload — append the local file URI directly (RN's FormData
+    // knows how to stream a `{ uri, type, name }` part). Round-tripping through
+    // fetch().blob() first is unreliable for local file:// URIs on RN and can
+    // silently produce an empty blob, which is why images were being dropped.
     if (entry.imageUri) {
-      const imageResponse = await fetch(entry.imageUri)
-      const imageBlob = await imageResponse.blob()
-      formData.append('image', imageBlob as any, 'image.jpg')
+      formData.append('picture', {
+        uri: entry.imageUri,
+        type: entry.imageMimeType || 'image/jpeg',
+        name: 'image.jpg',
+      } as any)
     }
 
-    // Handle audio upload
+    // Handle audio upload — expo-av's HIGH_QUALITY preset always outputs .m4a
+    // on both iOS and Android.
     if (entry.audioUri) {
-      const audioResponse = await fetch(entry.audioUri)
-      const audioBlob = await audioResponse.blob()
-      formData.append('audio', audioBlob as any, 'audio.m4a')
+      formData.append('voiceNote', {
+        uri: entry.audioUri,
+        type: 'audio/m4a',
+        name: 'audio.m4a',
+      } as any)
     }
 
     const response = await fetch(`${API_BASE_URL}/journal`, {
@@ -121,6 +134,8 @@ const createJournalEntry = async (entry: Omit<JournalEntry, 'id' | 'createdAt'>,
 
     return {
       ...data,
+      imageUri: data.imageUrl || data.imageUri,
+      audioUri: data.voiceNoteUrl || data.audioUri,
       createdAt: data.createdAt || data.created_at || 'Just now'
     }
   } catch (error) {
@@ -140,6 +155,7 @@ const PrivateJournalScreen = () => {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null)
+  const [selectedImageMimeType, setSelectedImageMimeType] = useState<string | null>(null)
   const [audioUri, setAudioUri] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<JournalCategory>(DEFAULT_CATEGORY)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -151,6 +167,145 @@ const PrivateJournalScreen = () => {
   const recordingRef = useRef<Audio.Recording | null>(null)
   const hasLoadedRef = useRef(false)
   const lastRefreshRef = useRef<number>(0)
+  const [isListeningContent, setIsListeningContent] = useState(false)
+  const pulseAnimContent = useRef(new Animated.Value(1)).current
+  const pulseLoopContent = useRef<Animated.CompositeAnimation | null>(null)
+  const acceptSpeechResultsContent = useRef(false)
+  const speechBaseTextContent = useRef('')
+  const [isListeningTitle, setIsListeningTitle] = useState(false)
+  const pulseAnimTitle = useRef(new Animated.Value(1)).current
+  const pulseLoopTitle = useRef<Animated.CompositeAnimation | null>(null)
+  const acceptSpeechResultsTitle = useRef(false)
+  const speechBaseTextTitle = useRef('')
+
+  const startContentPulse = () => {
+    pulseLoopContent.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimContent, { toValue: 1.35, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnimContent, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    )
+    pulseLoopContent.current.start()
+  }
+
+  const stopContentPulse = () => {
+    pulseLoopContent.current?.stop()
+    pulseAnimContent.setValue(1)
+  }
+
+  const startTitlePulse = () => {
+    pulseLoopTitle.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimTitle, { toValue: 1.35, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnimTitle, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    )
+    pulseLoopTitle.current.start()
+  }
+
+  const stopTitlePulse = () => {
+    pulseLoopTitle.current?.stop()
+    pulseAnimTitle.setValue(1)
+  }
+
+  const toggleTitleSpeech = async () => {
+    if (isListeningTitle) {
+      acceptSpeechResultsTitle.current = false
+      ExpoSpeechRecognitionModule.stop()
+      setIsListeningTitle(false)
+      stopTitlePulse()
+      return
+    }
+
+    const { status } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
+
+    if (status !== 'granted') {
+      Alert.alert(
+        'Microphone Permission Required',
+        'Please allow microphone access to use voice input.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      )
+      return
+    }
+
+    speechBaseTextTitle.current = title
+    acceptSpeechResultsTitle.current = true
+    setIsListeningTitle(true)
+    startTitlePulse()
+    ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false })
+  }
+
+  useSpeechRecognitionEvent('result', (event) => {
+    const transcript = event.results[0]?.transcript ?? ''
+    if (!transcript) return
+    if (acceptSpeechResultsTitle.current) {
+      const base = speechBaseTextTitle.current
+      setTitle(base.trim().length === 0 ? transcript : base.trimEnd() + ' ' + transcript)
+    } else if (acceptSpeechResultsContent.current) {
+      const base = speechBaseTextContent.current
+      setContent(base.trim().length === 0 ? transcript : base.trimEnd() + ' ' + transcript)
+    }
+  })
+
+  useSpeechRecognitionEvent('error', (event) => {
+    if (!acceptSpeechResultsTitle.current && !acceptSpeechResultsContent.current) return
+    console.warn('Speech recognition error:', event.error, event.message)
+    if (event.error !== 'aborted') {
+      Alert.alert('Speech Error', event.message || 'Speech recognition failed. Please try again.')
+    }
+    if (acceptSpeechResultsTitle.current) {
+      setIsListeningTitle(false)
+      stopTitlePulse()
+    } else {
+      setIsListeningContent(false)
+      stopContentPulse()
+    }
+  })
+
+  useSpeechRecognitionEvent('end', () => {
+    if (acceptSpeechResultsTitle.current) {
+      acceptSpeechResultsTitle.current = false
+      setIsListeningTitle(false)
+      stopTitlePulse()
+    } else if (acceptSpeechResultsContent.current) {
+      acceptSpeechResultsContent.current = false
+      setIsListeningContent(false)
+      stopContentPulse()
+    }
+  })
+
+  const toggleContentSpeech = async () => {
+    if (isListeningContent) {
+      acceptSpeechResultsContent.current = false
+      ExpoSpeechRecognitionModule.stop()
+      setIsListeningContent(false)
+      stopContentPulse()
+      return
+    }
+
+    const { status } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
+
+    if (status !== 'granted') {
+      Alert.alert(
+        'Microphone Permission Required',
+        'Please allow microphone access to use voice input.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      )
+      return
+    }
+
+    speechBaseTextContent.current = content
+    acceptSpeechResultsContent.current = true
+    setIsListeningContent(true)
+    startContentPulse()
+    ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false })
+  }
 
   // Load entries when token is available
   useEffect(() => {
@@ -180,6 +335,7 @@ const PrivateJournalScreen = () => {
     setTitle('')
     setContent('')
     setSelectedImageUri(null)
+    setSelectedImageMimeType(null)
     setAudioUri(null)
     setSelectedCategory(DEFAULT_CATEGORY)
     setSelectedTags([])
@@ -204,6 +360,7 @@ const PrivateJournalScreen = () => {
         title: title.trim(),
         content: content.trim(),
         imageUri: selectedImageUri || undefined,
+        imageMimeType: selectedImageMimeType || undefined,
         audioUri: audioUri || undefined,
         category: selectedCategory,
         tags: selectedTags,
@@ -239,6 +396,7 @@ const PrivateJournalScreen = () => {
 
     if (!result.canceled) {
       setSelectedImageUri(result.assets[0].uri)
+      setSelectedImageMimeType(result.assets[0].mimeType || 'image/jpeg')
     }
   }
 
@@ -285,7 +443,10 @@ const PrivateJournalScreen = () => {
     }
   }
 
-  const removeImage = () => setSelectedImageUri(null)
+  const removeImage = () => {
+    setSelectedImageUri(null)
+    setSelectedImageMimeType(null)
+  }
   const removeAudio = () => setAudioUri(null)
 
   // Tag handling functions
@@ -569,27 +730,57 @@ const PrivateJournalScreen = () => {
             {/* Title Input */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Title</Text>
-              <TextInput
-                style={styles.titleInput}
-                placeholder="e.g., A special moment, a worry, a dream..."
-                value={title}
-                onChangeText={setTitle}
-                placeholderTextColor="#999"
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={[styles.titleInput, { paddingRight: 44 }, isListeningTitle && { borderColor: currentTheme.primary }]}
+                  placeholder={isListeningTitle ? 'Listening…' : 'e.g., A special moment, a worry, a dream...'}
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholderTextColor={isListeningTitle ? currentTheme.primary : '#999'}
+                />
+                <TouchableOpacity
+                  onPress={toggleTitleSpeech}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center' }}
+                >
+                  <Animated.View style={{ transform: [{ scale: pulseAnimTitle }] }}>
+                    {isListeningTitle ? (
+                      <MicOff size={20} color={currentTheme.primary} />
+                    ) : (
+                      <Mic size={20} color={currentTheme.mutedForeground} />
+                    )}
+                  </Animated.View>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Content Input */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Your thoughts</Text>
-              <TextInput
-                style={styles.contentInput}
-                placeholder="Let it all flow..."
-                value={content}
-                onChangeText={setContent}
-                multiline
-                textAlignVertical="top"
-                placeholderTextColor="#999"
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={[styles.contentInput, { paddingBottom: 36 }, isListeningContent && { borderColor: currentTheme.primary }]}
+                  placeholder={isListeningContent ? 'Listening…' : 'Let it all flow...'}
+                  value={content}
+                  onChangeText={setContent}
+                  multiline
+                  textAlignVertical="top"
+                  placeholderTextColor={isListeningContent ? currentTheme.primary : '#999'}
+                />
+                <TouchableOpacity
+                  onPress={toggleContentSpeech}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ position: 'absolute', bottom: 10, right: 12 }}
+                >
+                  <Animated.View style={{ transform: [{ scale: pulseAnimContent }] }}>
+                    {isListeningContent ? (
+                      <MicOff size={20} color={currentTheme.primary} />
+                    ) : (
+                      <Mic size={20} color={currentTheme.mutedForeground} />
+                    )}
+                  </Animated.View>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Tag Selector */}
