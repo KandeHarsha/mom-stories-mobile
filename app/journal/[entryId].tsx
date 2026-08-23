@@ -160,7 +160,7 @@ const JournalEntryEdit = () => {
                 title: params.title,
                 content: params.content,
                 imageUri: params.imageUri && params.imageUri.trim() !== '' ? fixFirebaseStorageUri(params.imageUri) : undefined,
-                audioUri: params.audioUri && params.audioUri.trim() !== '' ? params.audioUri : undefined,
+                audioUri: params.audioUri && params.audioUri.trim() !== '' ? fixFirebaseStorageUri(params.audioUri) : undefined,
                 category: params.category || 'General',
                 tags: parsedTags,
                 createdAt: params.createdAt || 'Unknown date'
