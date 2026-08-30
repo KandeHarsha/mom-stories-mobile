@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext'
 import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
 import * as Updates from 'expo-updates'
-import { Baby, ChevronRight, Download, FileText, HelpCircle, LogIn, LogOut, RefreshCw, Settings, Shield, User } from 'lucide-react-native'
+import { Baby, ChevronRight, Download, FileText, HelpCircle, LogIn, LogOut, RefreshCw, Settings, Shield, Trash2, User } from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import React, { useEffect, useState } from 'react'
 import {
@@ -20,10 +20,11 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const ProfileScreen = () => {
-  const { user, logout, session, selectedChildId, setSelectedChildId, refreshUser } = useAuth()
+  const { user, logout, requestAccountDeletion, session, selectedChildId, setSelectedChildId, refreshUser } = useAuth()
   const { colorScheme } = useColorScheme()
   const currentTheme = themes[colorScheme || 'light'] ?? themes.light
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isRequestingDeletion, setIsRequestingDeletion] = useState(false)
   const [children, setChildren] = useState<any[]>([])
   const [loadingChildren, setLoadingChildren] = useState(false)
   const [isCheckingForUpdate, setIsCheckingForUpdate] = useState(false)
@@ -79,6 +80,33 @@ const ProfileScreen = () => {
 
   const handleLogin = () => {
     router.replace('/(auth)/login')
+  }
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all your data (journal entries, children profiles, memories, and more). This cannot be undone. We will email you a confirmation link to complete the deletion.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: async () => {
+            setIsRequestingDeletion(true)
+            try {
+              const result = await requestAccountDeletion()
+              if (result.success) {
+                Alert.alert('Check Your Email', 'We sent a confirmation link to your email address. Open it to permanently delete your account.')
+              } else {
+                Alert.alert('Error', result.message || 'Failed to request account deletion. Please try again.')
+              }
+            } finally {
+              setIsRequestingDeletion(false)
+            }
+          }
+        }
+      ]
+    )
   }
 
   const handleCheckForUpdates = async () => {
@@ -378,17 +406,30 @@ const ProfileScreen = () => {
         {/* Login/Logout Button */}
         <View style={styles.logoutSection}>
           {session ? (
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={handleLogout}
-              disabled={isLoggingOut}
-              activeOpacity={0.7}
-            >
-              <LogOut size={20} color={currentTheme.destructiveForeground} />
-              <Text style={styles.logoutButtonText}>
-                {isLoggingOut ? 'Logging out...' : 'Logout'}
-              </Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={styles.logoutButton}
+                onPress={handleLogout}
+                disabled={isLoggingOut}
+                activeOpacity={0.7}
+              >
+                <LogOut size={20} color={currentTheme.destructiveForeground} />
+                <Text style={styles.logoutButtonText}>
+                  {isLoggingOut ? 'Logging out...' : 'Logout'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteAccountButton}
+                onPress={handleDeleteAccount}
+                disabled={isRequestingDeletion}
+                activeOpacity={0.7}
+              >
+                <Trash2 size={20} color={currentTheme.destructive} />
+                <Text style={styles.deleteAccountButtonText}>
+                  {isRequestingDeletion ? 'Requesting...' : 'Delete Account'}
+                </Text>
+              </TouchableOpacity>
+            </>
           ) : (
             <TouchableOpacity
               style={styles.loginButton}
@@ -632,6 +673,22 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   logoutButtonText: {
     color: theme.destructiveForeground,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteAccountButton: {
+    marginTop: 12,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: theme.destructive,
+  },
+  deleteAccountButtonText: {
+    color: theme.destructive,
     fontSize: 16,
     fontWeight: '600',
   },

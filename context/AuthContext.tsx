@@ -14,6 +14,7 @@ interface AuthContextType {
   signin: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, phase: string) => Promise<{ success: boolean; autoLogin: boolean }>;
   logout: () => Promise<void>;
+  requestAccountDeletion: () => Promise<{ success: boolean; message?: string }>;
   user: any;
   selectedChildId: string | null;
   setSelectedChildId: (childId: string | null) => void;
@@ -25,6 +26,7 @@ const AuthContext = createContext<AuthContextType>({
   signin: async () => { },
   signup: async () => ({ success: false, autoLogin: false }),
   logout: async () => { },
+  requestAccountDeletion: async () => ({ success: false }),
   user: null,
   selectedChildId: null,
   setSelectedChildId: () => {},
@@ -263,11 +265,39 @@ const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const requestAccountDeletion = async (): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_API_URL}/auth/delete-user`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Origin": `${process.env.EXPO_PUBLIC_API_URL}`,
+            ...(session?.accessToken && { "Authorization": `Bearer ${session.accessToken}` })
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        return { success: false, message: data.error || data.message || 'Failed to request account deletion.' };
+      }
+
+      return { success: true, message: data.message };
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  };
+
   const contextData = {
     session,
     signin,
     signup,
     logout,
+    requestAccountDeletion,
     user,
     selectedChildId,
     setSelectedChildId,
