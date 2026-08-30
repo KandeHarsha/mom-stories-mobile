@@ -21,7 +21,7 @@ You may enter information into the App, including journal entries, photos, voice
 You are solely responsible for Your Content. Do not enter information about anyone other than yourself and your own children without the appropriate authority to do so (for example, as a parent or legal guardian).
 
 4. Account Data and Deletion
-You can update certain account information (such as your name and current phase) from Account Settings. Email addresses cannot be changed for security reasons. If you would like to delete your account or request removal of your data, contact us ${SUPPORT_CONTACT_NOTE} and we will process your request in accordance with applicable law.
+You can update certain account information (such as your name and current phase) from Account Settings. Email addresses cannot be changed for security reasons. You can permanently delete your account and all associated data at any time from Profile > Delete Account. You'll receive an email with a confirmation link to complete the deletion, after which this action cannot be undone. You may also contact us ${SUPPORT_CONTACT_NOTE} to request deletion of your account or data, and we will process your request in accordance with applicable law.
 
 5. Acceptable Use
 You agree not to:
@@ -113,7 +113,7 @@ Your authentication session is stored securely on your device using your operati
 • Access and correction: You can view and update certain account information (name, phase) from Account Settings. Your email address cannot be changed for security reasons.
 • Health data permissions: You can grant or revoke the App's access to Apple Health (iOS) or Health Connect (Android) at any time through your device's Settings app.
 • Notifications: You can disable push notifications at any time through your device settings.
-• Deletion: The App does not currently include a self-service "delete account" button. To request deletion of your account or personal data, or to request a copy of your data, contact us ${SUPPORT_CONTACT_NOTE}, and we will respond within a reasonable time and in accordance with applicable law.
+• Deletion: You can permanently delete your account and all associated data from Profile > Delete Account. We'll email you a confirmation link; once you confirm, this action cannot be undone. To request a copy of your data, or if you have trouble deleting your account, contact us ${SUPPORT_CONTACT_NOTE}, and we will respond within a reasonable time and in accordance with applicable law.
 • Depending on where you live, you may have additional rights under laws such as the GDPR or CCPA/CPRA, including the right to access, correct, delete, or restrict processing of your personal information, and the right to lodge a complaint with a supervisory authority. To exercise these rights, contact us as described above.
 
 6. Children's Privacy
