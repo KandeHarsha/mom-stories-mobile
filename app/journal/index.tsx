@@ -666,10 +666,10 @@ const PrivateJournalScreen = () => {
             </TouchableOpacity>
           </View>
 
-          <KeyboardAvoidingView 
+          <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={{ flex: 1 }}
-            keyboardVerticalOffset={120}
+            keyboardVerticalOffset={0}
           >
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               <Text style={styles.modalSubtitle}>What's on your mind and in your heart today?</Text>
