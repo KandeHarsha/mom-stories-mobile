@@ -58,14 +58,6 @@ interface Message {
   isSaving?: boolean
 }
 
-interface Memory {
-  id: string
-  title: string
-  text: string
-  createdAt: string
-  isAiResponse: boolean
-}
-
 interface AiSupportScreenProps {
   initialQuestion?: string
 }
